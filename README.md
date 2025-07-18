@@ -1,257 +1,137 @@
-# ハッシュベース署名最適化手法 技術仕様書
-**参考文献**: Dmitry Khovratovich, Mikhail Kudinov, Benedikt Wagner. "At the Top of the Hypercube – Better Size-Time Tradeoffs for Hash-Based Signatures." CRYPTO 2025.
+# Hypercube Signatures
 
-## 概要
+A Rust implementation of hash-based signature optimization techniques from the CRYPTO 2025 paper "At the Top of the Hypercube" by Khovratovich et al.
 
-本文書は、論文「A[t the Top of the Hypercube – Better Size-Time Tradeoffs for Hash-Based Signatures](https://eprint.iacr.org/2025/889.pdf)」で提案された新しいハッシュベース署名手法の技術仕様を記述する。この手法は、従来のWinternitzワンタイム署名スキームの検証コストを20-40%削減することを実現している。
+## Overview
 
-## 1. 基盤理論
+This repository implements three hash-based signature schemes that achieve 20-40% reduction in verification costs compared to conventional Winternitz one-time signatures:
 
-### 1.1 ハイパーキューブ構造
+- **TSL (Top Single Layer)** - Maps to a single hypercube layer, no checksum required
+- **TL1C (Top Layers with 1-Chain Checksum)** - Maps to multiple layers with a single checksum chain
+- **TLFC (Top Layers with Full Checksum)** - Maps to multiple layers with multiple checksum chains
 
-**定義**: ハイパーキューブ `[w]^v` は、アルファベット `[w] = {1, 2, ..., w}` 上の長さ `v` の全ての文字列の集合である。
+## Project Structure
 
-**レイヤー構造**: 
-- レイヤー `L_d` は、シンク頂点 `(w, w, ..., w)` からの距離が `d` である頂点の集合
-- `L_d = {(x_1, x_2, ..., x_v) ∈ [w]^v | vw - Σx_i = d}`
-- レイヤーサイズ: `ℓ_d = |L_d|`
-
-### 1.2 エンコーディング関数
-
-**定義**: エンコーディング関数 `f: M × R → [w]^v` は、メッセージ空間 `M` とランダムネス空間 `R` からハイパーキューブへのマッピング
-
-**非比較可能性**: 異なるコードワード `x ≠ x'` に対して、`x ≤ x'` でも `x ≥ x'` でもない
-
-**衝突メトリック**: `μ_ℓ²(f) = Σ_{x∈[w]^v} (Pr[f(m,r) = x])²`
-
-## 2. 提案手法
-
-### 2.1 TLFC (Top Layers with Full Checksum)
-
-#### パラメータ選択
-- セキュリティパラメータ `λ` に対して `w^v > 2^λ`
-- 衝突制限 `μ := 2^{-λ}`
-- 最適レイヤー範囲 `d_0` と密度関数 `{μ̂_d}` をTheorem 1から計算
-- チェックサム長 `v' := ⌈log_w(d_0 + 1)⌉`
-
-#### エンコーディングアルゴリズム
 ```
-入力: (m, r) ∈ M × R
-1. x := Ψ(H(m, r))  // ランダムオラクル + 非均一マッピング
-2. d := layer(x)     // レイヤー計算
-3. b := (b_1, ..., b_v') // dをbase-w表現に変換
-4. 出力: (x_1, ..., x_v, b_1, ..., b_v')
+src/
+├── core/               # Core hypercube operations
+│   ├── hypercube.rs   # Hypercube and vertex structures
+│   ├── layer.rs       # Layer calculations
+│   ├── mapping.rs     # Vertex-integer bijective mappings
+│   └── encoding.rs    # Encoding traits
+├── schemes/           # Signature scheme implementations
+│   ├── tsl.rs        # TSL scheme
+│   ├── tl1c.rs       # TL1C scheme
+│   └── tlfc.rs       # TLFC scheme
+├── crypto/           # Cryptographic primitives
+│   ├── hash.rs       # SHA-256/SHA3-256 implementations
+│   └── random.rs     # Secure random number generation
+└── wots.rs           # Winternitz OTS implementation
 ```
 
-#### 非均一マッピング関数 Ψ
-```
-Ψ: {0, 1, ..., w^v - 1} → [w]^v
-各 x ∈ [w]^v に対して: Pr[Ψ(z) = x] = μ̂_{layer(x)}
-```
+## Building
 
-#### 署名サイズ
-- `v + v'` チェーン
-- `v' = ⌈log_w(d_0 + 1)⌉` チェックサムチェーン
+```bash
+# Build in release mode
+cargo build --release
 
-### 2.2 TL1C (Top Layers with 1-Chain Checksum)
+# Run all tests
+cargo test
 
-#### パラメータ選択
-- `w^v > 2^λ`
-- 最小 `d_0` を `ℓ_{[0:d_0]} ≥ 2^λ` となるように選択
-
-#### エンコーディングアルゴリズム
-```
-入力: (m, r) ∈ M × R
-1. x := Ψ(H(m, r))  // 均一マッピング（上位レイヤーのみ）
-2. b := layer(x) + 1 // 1チェーンチェックサム
-3. 出力: (x_1, ..., x_v, b)
+# Run benchmarks
+cargo bench
 ```
 
-#### 非均一マッピング関数 Ψ
-```
-Pr[Ψ(z) = x] = {
-    1/ℓ_{[0:d_0]}, if layer(x) ≤ d_0
-    0,              if layer(x) > d_0
-}
-```
+## Usage Example
 
-#### 署名サイズ
-- `v + 1` チェーン
-- 単一チェックサムチェーン
+```rust
+use hypercube_signatures::schemes::tsl::{TSL, TSLConfig};
+use hypercube_signatures::wots::{WotsParams, WotsKeypair};
 
-### 2.3 TSL (Top Single Layer)
+// Create TSL configuration for 128-bit security
+let config = TSLConfig::new(128);
+let tsl = TSL::new(config);
 
-#### パラメータ選択
-- `w^v > 2^{λ+log₄λ}`
-- 最小 `d_0` を `ℓ_{d_0} ≥ 2^λ` となるように選択
+// Generate WOTS keypair
+let params = WotsParams::from_tsl(&tsl);
+let keypair = WotsKeypair::generate(&params);
 
-#### エンコーディングアルゴリズム
-```
-入力: (m, r) ∈ M × R
-1. x := Ψ(H(m, r))  // 単一レイヤーマッピング
-2. 出力: x
+// Sign a message
+let message = b"Hello, world!";
+let signature = keypair.sign(message, &tsl);
+
+// Verify the signature
+assert!(keypair.verify(message, &signature, &tsl));
 ```
 
-#### 非均一マッピング関数 Ψ
-```
-Pr[Ψ(z) = x] = {
-    1/ℓ_{d_0}, if layer(x) = d_0
-    0,          if layer(x) ≠ d_0
-}
-```
+## Implemented Features
 
-#### 署名サイズ
-- `v` チェーン
-- チェックサム不要（同一レイヤーにより非比較可能性保証）
+### Core Components
 
-## 3. ワンタイム署名スキーム
+- **Hypercube Operations**: Efficient vertex operations in $[w]^v$ hypercube space
+- **Layer Calculations**: Compute layer sizes using binomial coefficients
+- **Bijective Mappings**: Convert between vertices and integers within layers
+- **Hash Functions**: SHA-256 and SHA3-256 with configurable hash chains
 
-### 3.1 鍵生成 (KeyGen)
-```
-入力: パラメータ par
-1. for i ∈ [v]:
-   - sk_i ← X （ランダム選択）
-   - pk_i := H^{w-1}(sk_i) （w-1回ハッシュ）
-2. sk := (sk_1, ..., sk_v)
-3. pk := (pk_1, ..., pk_v)
-出力: (pk, sk)
-```
+### Signature Schemes
 
-### 3.2 署名生成 (Sign)
-```
-入力: sk, メッセージ m
-1. r ← R （ランダムネス生成）
-2. x = (x_1, ..., x_v) := f(m, r) （エンコーディング）
-3. for i ∈ [v]:
-   - σ_i := H^{x_i-1}(sk_i)
-4. σ := (r, σ_1, ..., σ_v)
-出力: σ
-```
+Each scheme provides:
+- Automatic parameter selection for security levels (128-bit, 160-bit)
+- Message encoding with randomness
+- Integration with Winternitz OTS
+- Comprehensive test coverage
 
-### 3.3 署名検証 (Verify)
-```
-入力: pk, メッセージ m, 署名 σ = (r, σ_1, ..., σ_v)
-1. x = (x_1, ..., x_v) := f(m, r) （エンコーディング再計算）
-2. for i ∈ [v]:
-   - pk'_i := H^{w-x_i}(σ_i) （検証計算）
-3. b := (pk_1 = pk'_1) ∧ ... ∧ (pk_v = pk'_v)
-出力: b
-```
+### TSL (Top Single Layer)
+- Maps messages to a single hypercube layer
+- No checksum required due to incomparability within layers
+- Simplest implementation with lowest overhead
 
-## 4. セキュリティ特性
+### TL1C (Top Layers with 1-Chain Checksum)
+- Maps messages to multiple top layers (0 to d₀)
+- Single checksum chain: `checksum = layer + 1`
+- Balance between security and efficiency
 
-### 4.1 セキュリティ要件
+### TLFC (Top Layers with Full Checksum)
+- Maps messages to multiple top layers
+- Multiple checksum chains using formula: $C_i = \sum_j 2^{j \bmod c} \cdot (w - a_j)$
+- Highest optimization for verification cost
 
-**ワンタイムセキュリティ**: 
-```
-Pr[Ver(pk, m*, σ*) = 1 ∧ m* ≠ m | 
-    (pk,sk) ← Gen(par), (m, St) ← A(par, pk),
-    σ ← Sig(sk, m), (m*, σ*) ← A(St, σ)] ≤ ε(t)
+## Testing
+
+The implementation includes comprehensive test suites:
+
+```bash
+# Run unit tests
+cargo test
+
+# Run specific scheme tests
+cargo test test_tsl
+cargo test test_tl1c
+cargo test test_tlfc
+
+# Run with output
+cargo test -- --nocapture
 ```
 
-### 4.2 目標衝突耐性
+## Performance
 
-**定義**: エンコーディング関数 `f` が `ε`-secure w.r.t. target collision resistance
-```
-Pr[f(m, r) = f(m*, r*) ∧ m* ≠ m | 
-    (m, St) ← A, r ← R, (m*, r*) ← A(St, r)] ≤ ε(t)
-```
+Verification cost improvements at 128-bit security:
 
-**保証**: `ε(t) ≤ t · (1/|R| + 2^{-λ})`
+| Scheme | Signature Size | Verification Cost | Improvement vs WOTS |
+|--------|---------------|-------------------|-------------------|
+| TSL    | 64 chains     | 70 hash ops      | ~45% reduction    |
+| TL1C   | 85 chains     | 54 hash ops      | ~57% reduction    |
+| TLFC   | 134 chains    | 40 hash ops      | ~69% reduction    |
 
-### 4.3 非比較可能性
+## Dependencies
 
-すべての提案手法で非比較可能性を保証：
-- **TLFC**: チェックサムによる保証
-- **TL1C**: 1チェーンチェックサムによる保証  
-- **TSL**: 同一レイヤーマッピングによる保証
+- `sha2`: SHA-256 implementation
+- `sha3`: SHA3-256 implementation
+- `rand`: Cryptographically secure RNG
+- `num-integer`: Binomial coefficient calculations
 
-## 5. 性能特性
+## References
 
-### 5.1 検証コスト
-
-**コスト関数**: 
-```
-cost(f, m, r) := C_f^v + layer(f(m, r))
-```
-
-**期待コスト**:
-```
-cost(f) := E_{m,r}[cost(f, m, r)] = C_f^v + E_{m,r}[layer(f(m, r))]
-```
-
-### 5.2 下界定理 (Theorem 1)
-
-衝突メトリック `w^{-v} ≤ μ_ℓ²(f) ≤ μ` を満たす任意のエンコーディング `f` に対して：
-
-- `μ ≥ 1/ℓ_0` の場合: `cost(f) ≥ C_f^v + C_0`
-- `μ = w^{-v}` の場合: `cost(f) = C_f^v + w^{-v} · Σ ℓ_d C_d`
-- `w^{-v} < μ < 1/ℓ_0` の場合: `cost(f) ≥ C_f^v + C_ℓ²(μ, v, w)`
-
-### 5.3 具体的性能改善
-
-**128ビットセキュリティレベルでの比較**:
-
-| 署名サイズ v | WOTS | WOTS-TS | TLFC | TL1C | TSL | 下界 |
-|-------------|------|---------|------|------|-----|------|
-| 132         | 131  | 66      | 40   | 39   | 39  | 38   |
-| 84          | 126  | 84      | 55   | 54   | 54  | 52   |
-| 64          | 127  | 96      | 71   | 70   | 70  | 67   |
-
-**改善率**:
-- WOTS比: 60-70%削減
-- WOTS-TS比: 25-40%削減
-- 下界比: 95-98%達成
-
-## 6. 実装考慮事項
-
-### 6.1 頂点マッピングアルゴリズム
-
-**整数から頂点へのマッピング** (`MapToVertex_{w,v,d}`):
-```
-入力: x ∈ {0, ..., ℓ_d - 1}
-出力: レイヤー d の頂点 a ∈ [w]^v
-```
-
-**頂点から整数へのマッピング** (`MapToInteger_{w,v,d}`):
-```
-入力: レイヤー d の頂点 a ∈ [w]^v  
-出力: x ∈ {0, ..., ℓ_d - 1}
-```
-
-### 6.2 効率的実装
-
-**レイヤーサイズ計算**:
-```
-ℓ_d = Σ_{s=0}^{⌊d/w⌋} (-1)^s · C(v,s) · C(d-s·w+v-1, v-1)
-```
-
-**キャッシュ戦略**: 
-- レイヤーサイズの事前計算とメモ化
-- 二項係数の効率的計算
-
-### 6.3 ランダムオラクル実装
-
-**推奨ハッシュ関数**: SHA-256, SHA-3, SHAKE-256
-
-**ハッシュチェーン**: `H^k(x) = H(H(...H(x)...))`
-
-## 7. パラメータ推奨値
-
-### 7.1 128ビットセキュリティ
-
-| v   | w  | 手法  | 検証コスト | チェーン数 |
-|-----|----| ------|------------|------------|
-| 132 | 4  | TLFC  | 40         | 134        |
-| 84  | 6  | TL1C  | 54         | 85         |
-| 64  | 8  | TSL   | 70         | 64         |
-
-### 7.2 160ビットセキュリティ
-
-| v   | w  | 手法  | 検証コスト | チェーン数 |
-|-----|----| ------|------------|------------|
-| 168 | 4  | TLFC  | 48         | 170        |
-| 104 | 7  | TL1C  | 67         | 105        |
-| 80  | 8  | TSL   | 86         | 80         |
-
-
+- Paper: [At the Top of the Hypercube](https://eprint.iacr.org/2025/889.pdf)
+- Authors: Dmitry Khovratovich, Mikhail Kudinov, Benedikt Wagner
+- Conference: CRYPTO 2025
