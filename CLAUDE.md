@@ -50,3 +50,7 @@ Reference README.md Section 7 for security-level appropriate parameters:
 This work achieves 20-40% verification cost reduction over previous Winternitz schemes while maintaining security guarantees. The theoretical lower bounds are provided in Theorem 1 (README.md Section 5.2).
 
 **Original Paper**: Available at https://eprint.iacr.org/2025/889.pdf
+
+## Japanese Project Notes
+
+- このプロジェクトはpaperの定義対して厳密な実装をするのが目的です。

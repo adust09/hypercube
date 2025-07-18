@@ -11,9 +11,9 @@ fn test_vertex_to_integer_basic() {
     let v2 = vec![2, 1, 2];
     let v3 = vec![2, 2, 1];
     
-    let i1 = vertex_to_integer(&v1, 2, 3, 1);
-    let i2 = vertex_to_integer(&v2, 2, 3, 1);
-    let i3 = vertex_to_integer(&v3, 2, 3, 1);
+    let i1 = vertex_to_integer(&v1, 2, 3, 1).unwrap();
+    let i2 = vertex_to_integer(&v2, 2, 3, 1).unwrap();
+    let i3 = vertex_to_integer(&v3, 2, 3, 1).unwrap();
     
     // All should map to different integers in [0, 2]
     assert!(i1 < 3);
@@ -31,7 +31,7 @@ fn test_integer_to_vertex_basic() {
     
     // Binary hypercube [2]^3, layer 1 (size 3)
     for i in 0..3 {
-        let vertex = integer_to_vertex(i, 2, 3, 1);
+        let vertex = integer_to_vertex(i, 2, 3, 1).unwrap();
         
         // Check it's a valid vertex
         assert_eq!(vertex.len(), 3);
@@ -64,8 +64,8 @@ fn test_mapping_bijection() {
             
             // Test round-trip for several integers
             for i in 0..layer_size.min(10) {
-                let vertex = integer_to_vertex(i, w, v, d);
-                let i_back = vertex_to_integer(&vertex, w, v, d);
+                let vertex = integer_to_vertex(i, w, v, d).unwrap();
+                let i_back = vertex_to_integer(&vertex, w, v, d).unwrap();
                 assert_eq!(i, i_back, "Round trip failed for i={}, w={}, v={}, d={}", i, w, v, d);
             }
         }
@@ -78,7 +78,7 @@ fn test_map_to_vertex_trait() {
     let mapper = MapToVertex::new(4, 3, 2);
     
     // Map integer 0 to a vertex in layer 2
-    let vertex = mapper.map(0);
+    let vertex = mapper.map(0).unwrap();
     
     // Verify it's in the correct layer
     let layer = 3 * 4 - vertex.iter().sum::<usize>();
@@ -92,7 +92,7 @@ fn test_map_to_integer_trait() {
     
     // Create a vertex in layer 2
     let vertex = vec![3, 3, 4]; // layer = 12 - 10 = 2
-    let integer = mapper.map(&vertex);
+    let integer = mapper.map(&vertex).unwrap();
     
     // Verify the integer is in valid range
     let layer_size = hypercube_signatures::core::layer::calculate_layer_size(2, 3, 4);
@@ -106,17 +106,15 @@ fn test_mapping_consistency() {
     let v = 3;
     let d = 3;
     
-    // Generate all vertices in layer d
-    let mut vertices: Vec<Vec<usize>> = Vec::new();
-    // This is a simplified approach - in practice we'd use the iterator
-    // For now, we'll test that the mapping is consistent
+    // Test that the mapping is consistent
+    // We'll generate all vertices using the integer_to_vertex function
     
     let layer_size = hypercube_signatures::core::layer::calculate_layer_size(d, v, w);
     let mut mapped_integers = std::collections::HashSet::new();
     
     for i in 0..layer_size {
-        let vertex = integer_to_vertex(i, w, v, d);
-        let mapped = vertex_to_integer(&vertex, w, v, d);
+        let vertex = integer_to_vertex(i, w, v, d).unwrap();
+        let mapped = vertex_to_integer(&vertex, w, v, d).unwrap();
         assert_eq!(i, mapped);
         mapped_integers.insert(mapped);
     }

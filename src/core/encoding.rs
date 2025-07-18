@@ -29,9 +29,9 @@ pub fn calculate_collision_metric(
     v: usize,
     w: usize
 ) -> f64 {
-    use crate::core::hypercube::{Hypercube, Vertex};
+    use crate::core::hypercube::Hypercube;
     
-    let hc = Hypercube::new(w, v);
+    let _hc = Hypercube::new(w, v);
     let mut sum = 0.0;
     
     // Sum over all vertices in the hypercube

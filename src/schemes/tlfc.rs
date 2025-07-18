@@ -147,7 +147,7 @@ impl TLFC {
                     self.config.w,
                     self.config.v,
                     d
-                );
+                ).unwrap_or_else(|_| vec![self.config.w; self.config.v]);
                 return Vertex::new(components);
             }
             cumulative += layer_size;

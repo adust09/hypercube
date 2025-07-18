@@ -1,4 +1,4 @@
-use hypercube_signatures::wots::{WotsSignature, WotsParams, WotsKeypair};
+use hypercube_signatures::wots::{WotsParams, WotsKeypair};
 use hypercube_signatures::crypto::hash::HashFunction;
 
 #[test]

@@ -1,6 +1,6 @@
 // Random number generation
 
-use rand::{RngCore, CryptoRng};
+use rand::RngCore;
 use rand::rngs::OsRng;
 
 /// Secure random number generator trait

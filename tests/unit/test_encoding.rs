@@ -53,7 +53,7 @@ fn test_non_uniform_mapping_trait() {
                 self.hypercube.alphabet_size(),
                 self.hypercube.dimension(),
                 self.target_layer
-            );
+            ).unwrap_or_else(|_| vec![self.hypercube.alphabet_size(); self.hypercube.dimension()]);
             Vertex::new(components)
         }
         

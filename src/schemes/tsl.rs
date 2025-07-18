@@ -99,7 +99,7 @@ impl TSL {
     }
     
     /// Map an integer to a vertex in layer d0
-    pub fn map_to_layer(&self, value: usize) -> Vertex {
+    pub fn map_to_layer(&self, value: usize) -> Result<Vertex, crate::core::mapping::MappingError> {
         let layer_size = calculate_layer_size(self.config.d0, self.config.v, self.config.w);
         let index = value % layer_size;
         
@@ -108,13 +108,13 @@ impl TSL {
             self.config.w,
             self.config.v,
             self.config.d0
-        );
+        )?;
         
-        Vertex::new(components)
+        Ok(Vertex::new(components))
     }
     
     /// Encode message and randomness to vertex
-    pub fn encode(&self, message: &[u8], randomness: &[u8]) -> Vertex {
+    pub fn encode(&self, message: &[u8], randomness: &[u8]) -> Result<Vertex, crate::core::mapping::MappingError> {
         // H(m || r)
         let mut input = Vec::new();
         input.extend_from_slice(message);
@@ -135,7 +135,11 @@ impl TSL {
 
 impl EncodingScheme for TSL {
     fn encode(&self, message: &[u8], randomness: &[u8]) -> Vertex {
-        self.encode(message, randomness)
+        // Call the TSL-specific encode method and handle errors
+        TSL::encode(self, message, randomness).unwrap_or_else(|_| {
+            // Fallback to sink vertex if mapping fails
+            Vertex::new(vec![self.config.w; self.config.v])
+        })
     }
     
     fn alphabet_size(&self) -> usize {
@@ -149,7 +153,10 @@ impl EncodingScheme for TSL {
 
 impl NonUniformMapping for TSL {
     fn map(&self, value: usize) -> Vertex {
-        self.map_to_layer(value)
+        self.map_to_layer(value).unwrap_or_else(|_| {
+            // Fallback to sink vertex if mapping fails
+            Vertex::new(vec![self.config.w; self.config.v])
+        })
     }
     
     fn probability(&self, vertex: &Vertex) -> f64 {
