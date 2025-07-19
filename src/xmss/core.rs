@@ -28,12 +28,11 @@ impl XMSSParams {
                 "Security bits must be 128, 160, or 256");
         
         let (w, len) = if use_hypercube {
-            match security_bits {
-                128 => (64, 64),
-                160 => (80, 80),
-                256 => (128, 128),
-                _ => unreachable!(),
-            }
+            // For hypercube with TSL, we need to match the actual TSL parameters
+            use crate::schemes::tsl::{TSL, TSLConfig};
+            use crate::core::encoding::EncodingScheme;
+            let tsl = TSL::new(TSLConfig::new(security_bits));
+            (tsl.alphabet_size(), tsl.dimension())
         } else {
             (67, 67)
         };
@@ -92,9 +91,8 @@ impl XMSSPublicKey {
         &self.public_seed
     }
 
-    pub fn verify(&self, message: &[u8], signature: &crate::xmss::signature::XMSSSignature) -> bool {
+    pub fn verify(&self, message: &[u8], signature: &crate::xmss::signature::XMSSSignature, params: &XMSSParams) -> bool {
         use crate::crypto::hash::{HashFunction, SHA256};
-        use crate::xmss::wots_plus::WOTSPlusParams;
         
         let hasher = SHA256::new();
         
@@ -106,12 +104,8 @@ impl XMSSPublicKey {
         msg_data.extend_from_slice(message);
         let message_digest = hasher.hash(&msg_data);
         
-        // Verify WOTS signature
-        let _wots_params = WOTSPlusParams::from_xmss_params(&XMSSParams::new(10, 67, 67)); // TODO: get from signature
-        let _address = (signature.leaf_index() as u32).to_be_bytes();
-        
-        // Compute leaf from WOTS signature
-        let wots_pk_hash = compute_wots_public_key_hash(&message_digest, signature.wots_signature(), &hasher);
+        // Compute leaf from WOTS signature with correct parameters
+        let wots_pk_hash = compute_wots_public_key_hash_with_params(&message_digest, signature.wots_signature(), &hasher, params);
         
         // Verify authentication path
         let computed_root = signature.auth_path().compute_root(
@@ -134,7 +128,7 @@ impl XMSSPublicKey {
 #[derive(Debug, Clone)]
 pub struct XMSSPrivateKey {
     leaf_index: usize,
-    wots_keys: Vec<Vec<u8>>,
+    _wots_keys: Vec<Vec<u8>>,
     sk_seed: Vec<u8>,
     sk_prf: Vec<u8>,
     public_seed: Vec<u8>,
@@ -157,7 +151,7 @@ impl XMSSPrivateKey {
         
         XMSSPrivateKey {
             leaf_index,
-            wots_keys,
+            _wots_keys: wots_keys,
             sk_seed,
             sk_prf,
             public_seed,
@@ -209,23 +203,50 @@ pub struct XMSSPrivateKeyState {
     pub root: Vec<u8>,
 }
 
-fn compute_wots_public_key_hash(
+fn compute_wots_public_key_hash_with_params(
     message_digest: &[u8],
     wots_signature: &crate::wots::WotsSignature,
     hasher: &dyn HashFunction,
+    params: &XMSSParams,
 ) -> Vec<u8> {
     use crate::wots::hash_chain;
     
-    // Convert message digest to base-w representation
-    let w = 67; // TODO: Get from params
+    let w = params.winternitz_parameter();
     let chains = wots_signature.chains().len();
-    let message_values = base_w_from_bytes(message_digest, w, chains);
+    
+    let message_values = if params.use_hypercube() {
+        // For hypercube encoding, apply the same TSL encoding as in signing
+        use crate::schemes::tsl::{TSL, TSLConfig};
+        use crate::core::encoding::EncodingScheme;
+        
+        // Use the same zero randomness as in signing
+        let randomness = [0u8; 32];
+        
+        // Use the same TSL encoding as in signing
+        let security_bits = match w {
+            8 => 128,   // TSL uses w=8 for 128-bit security
+            6 => 160,   
+            4 => 256,
+            _ => 128,
+        };
+        let tsl = TSL::new(TSLConfig::new(security_bits));
+        let vertex = <TSL as EncodingScheme>::encode(&tsl, message_digest, &randomness);
+        
+        // Convert from [1, w] to [0, w-1] as done in signing
+        vertex.components()
+            .iter()
+            .map(|&x| x.saturating_sub(1))
+            .collect()
+    } else {
+        // Standard base-w encoding
+        base_w_from_bytes(message_digest, w, chains)
+    };
     
     // Reconstruct WOTS public key chains
     let mut pk_chains = Vec::new();
     for (i, sig_chain) in wots_signature.chains().iter().enumerate() {
         let x_i = message_values[i];
-        let remaining_iterations = w - x_i;
+        let remaining_iterations = w - 1 - x_i;
         let pk_chain = hash_chain(hasher, sig_chain, remaining_iterations);
         pk_chains.push(pk_chain);
     }
@@ -252,7 +273,7 @@ fn base_w_from_bytes(bytes: &[u8], w: usize, out_len: usize) -> Vec<usize> {
         bits += 8;
         
         while bits >= log_w && result.len() < out_len {
-            result.push(((total & w_mask) + 1) as usize);
+            result.push((total & w_mask) as usize);
             total >>= log_w;
             bits -= log_w;
         }
@@ -262,14 +283,14 @@ fn base_w_from_bytes(bytes: &[u8], w: usize, out_len: usize) -> Vec<usize> {
         }
     }
     
-    // If we need more values, pad with 1s
+    // If we need more values, pad with 0s
     while result.len() < out_len {
         if bits > 0 {
-            result.push(((total & w_mask) + 1) as usize);
+            result.push((total & w_mask) as usize);
             total >>= log_w;
             bits = bits.saturating_sub(log_w);
         } else {
-            result.push(1);
+            result.push(0);
         }
     }
     

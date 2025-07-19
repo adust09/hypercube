@@ -92,7 +92,7 @@ mod xmss_tests {
         let message = b"Hello, XMSS!";
         
         let signature = keypair.sign(message);
-        assert!(keypair.public_key().verify(message, &signature));
+        assert!(keypair.public_key().verify(message, &signature, keypair.params()));
         
         assert_eq!(keypair.private_key().leaf_index(), 1);
     }
@@ -106,7 +106,7 @@ mod xmss_tests {
         for i in 0..max_signatures {
             let message = format!("Message {}", i);
             let signature = keypair.sign(message.as_bytes());
-            assert!(keypair.public_key().verify(message.as_bytes(), &signature));
+            assert!(keypair.public_key().verify(message.as_bytes(), &signature, keypair.params()));
             assert_eq!(keypair.private_key().leaf_index(), i + 1);
         }
     }
@@ -134,7 +134,7 @@ mod xmss_tests {
         let serialized = signature.to_bytes();
         let deserialized = XMSSSignature::from_bytes(&serialized, &params).unwrap();
         
-        assert!(keypair.public_key().verify(message, &deserialized));
+        assert!(keypair.public_key().verify(message, &deserialized, keypair.params()));
     }
 
     #[test]
@@ -147,7 +147,7 @@ mod xmss_tests {
             let message = format!("Test with height {}", h);
             
             let signature = keypair.sign(message.as_bytes());
-            assert!(keypair.public_key().verify(message.as_bytes(), &signature));
+            assert!(keypair.public_key().verify(message.as_bytes(), &signature, keypair.params()));
         }
     }
 
@@ -190,7 +190,7 @@ mod xmss_tests {
         let message = b"Hypercube optimized XMSS";
         
         let signature = keypair.sign(message);
-        assert!(keypair.public_key().verify(message, &signature));
+        assert!(keypair.public_key().verify(message, &signature, keypair.params()));
         
         let wots_chains = signature.wots_signature().chains().len();
         assert!(wots_chains < 67);
@@ -210,6 +210,6 @@ mod xmss_tests {
         assert_eq!(restored_keypair.private_key().leaf_index(), 2);
         
         let signature = restored_keypair.sign(b"Message 3");
-        assert!(restored_keypair.public_key().verify(b"Message 3", &signature));
+        assert!(restored_keypair.public_key().verify(b"Message 3", &signature, restored_keypair.params()));
     }
 }

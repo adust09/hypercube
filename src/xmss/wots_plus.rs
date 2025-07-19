@@ -4,7 +4,6 @@ use crate::schemes::tsl::{TSL, TSLConfig};
 use crate::schemes::tl1c::TL1C;
 use crate::schemes::tlfc::TLFC;
 use crate::xmss::core::XMSSParams;
-use crate::core::encoding::EncodingScheme;
 
 #[derive(Debug, Clone)]
 pub struct WOTSPlusParams {
@@ -42,24 +41,52 @@ impl WOTSPlusParams {
         &self.inner_params
     }
 
-    pub fn generate_keypair(&self, _seed: &[u8], _address: &[u8]) -> WOTSPlusKeypair {
+    pub fn generate_keypair(&self, seed: &[u8], address: &[u8]) -> WOTSPlusKeypair {
+        // Always generate deterministic keypair with the inner params
+        let keypair = Self::generate_deterministic_keypair(&self.inner_params, seed, address);
+        
         if self.use_hypercube {
             let tsl = TSL::new(TSLConfig::new(self.security_bits));
-            // TSL has w and v dimensions
-            let wots_params = WotsParams::new(tsl.alphabet_size(), tsl.dimension());
-            let keypair = WotsKeypair::generate(&wots_params);
-            
             WOTSPlusKeypair {
                 keypair,
                 scheme: HypercubeScheme::TSL(tsl),
             }
         } else {
-            let keypair = WotsKeypair::generate(&self.inner_params);
             WOTSPlusKeypair {
                 keypair,
                 scheme: HypercubeScheme::None,
             }
         }
+    }
+    
+    fn generate_deterministic_keypair(params: &WotsParams, seed: &[u8], address: &[u8]) -> WotsKeypair {
+        let hasher = SHA256::new();
+        let mut sk_chains = Vec::with_capacity(params.chains());
+        let mut pk_chains = Vec::with_capacity(params.chains());
+        
+        // Generate each chain deterministically
+        for i in 0..params.chains() {
+            // PRF(seed || address || chain_index)
+            let mut prf_input = Vec::new();
+            prf_input.extend_from_slice(seed);
+            prf_input.extend_from_slice(address);
+            prf_input.extend_from_slice(&(i as u32).to_be_bytes());
+            
+            // Generate secret key for this chain
+            let sk_i = hasher.hash(&prf_input);
+            
+            // Compute public key as H^{w-1}(sk_i)
+            let pk_i = crate::wots::hash_chain(&hasher, &sk_i, params.w() - 1);
+            
+            sk_chains.push(sk_i);
+            pk_chains.push(pk_i);
+        }
+        
+        WotsKeypair::from_components(
+            crate::wots::WotsPublicKey::from_chains(pk_chains, params.clone()),
+            crate::wots::WotsSecretKey::from_chains(sk_chains),
+            params.clone()
+        )
     }
 }
 
@@ -123,7 +150,7 @@ fn base_w_from_bytes(bytes: &[u8], w: usize, out_len: usize) -> Vec<usize> {
         bits += 8;
         
         while bits >= log_w && result.len() < out_len {
-            result.push(((total & w_mask) + 1) as usize);
+            result.push((total & w_mask) as usize);
             total >>= log_w;
             bits -= log_w;
         }
@@ -134,14 +161,14 @@ fn base_w_from_bytes(bytes: &[u8], w: usize, out_len: usize) -> Vec<usize> {
         }
     }
     
-    // If we need more values, pad with 1s
+    // If we need more values, pad with 0s
     while result.len() < out_len {
         if bits > 0 {
-            result.push(((total & w_mask) + 1) as usize);
+            result.push((total & w_mask) as usize);
             total >>= log_w;
             bits = bits.saturating_sub(log_w);
         } else {
-            result.push(1);
+            result.push(0);
         }
     }
     

@@ -26,7 +26,7 @@ fn main() {
     println!("✓ Signature creation test passed");
     
     // Test 4: Verify signature
-    let is_valid = keypair.public_key().verify(message, &signature);
+    let is_valid = keypair.public_key().verify(message, &signature, keypair.params());
     if is_valid {
         println!("✓ Signature verification test passed");
     } else {

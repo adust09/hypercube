@@ -60,6 +60,10 @@ impl XMSSKeypair {
     pub fn public_key(&self) -> &XMSSPublicKey {
         &self.public_key
     }
+    
+    pub fn params(&self) -> &XMSSParams {
+        &self.params
+    }
 
     pub fn private_key(&self) -> &XMSSPrivateKey {
         &self.private_key
