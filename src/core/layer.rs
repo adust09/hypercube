@@ -17,30 +17,30 @@ pub fn calculate_layer_size(d: usize, v: usize, w: usize) -> usize {
     if v == 0 {
         return if d == 0 { 1 } else { 0 };
     }
-    
+
     // Maximum possible layer is v(w-1)
     if d > v * (w - 1) {
         return 0;
     }
-    
+
     let mut sum = BigUint::zero();
     let max_s = d / w;
-    
+
     for s in 0..=max_s {
         // Calculate C(v, s)
         let binom_v_s = binomial(v, s);
-        
+
         // Calculate d - s*w + v - 1
         let inner = d as i64 - (s * w) as i64 + v as i64 - 1;
-        
+
         // If inner < v-1, the binomial coefficient is 0
         if inner < (v - 1) as i64 {
             continue;
         }
-        
+
         // Calculate C(d-s*w+v-1, v-1)
         let binom_inner = binomial(inner as usize, v - 1);
-        
+
         // Add or subtract based on (-1)^s
         let term = binom_v_s * binom_inner;
         if s % 2 == 0 {
@@ -55,7 +55,7 @@ pub fn calculate_layer_size(d: usize, v: usize, w: usize) -> usize {
             }
         }
     }
-    
+
     // Convert BigUint to usize
     // For reasonable hypercube sizes, this should fit in usize
     sum.to_string().parse().unwrap_or(0)
@@ -66,23 +66,23 @@ fn binomial(n: usize, k: usize) -> BigUint {
     if k > n {
         return BigUint::zero();
     }
-    
+
     if k == 0 || k == n {
         return BigUint::one();
     }
-    
+
     // Use the more efficient formula: C(n,k) = n! / (k! * (n-k)!)
     // But calculate it as: C(n,k) = (n * (n-1) * ... * (n-k+1)) / (k * (k-1) * ... * 1)
     let k = k.min(n - k); // Take advantage of symmetry
-    
+
     let mut numerator = BigUint::one();
     let mut denominator = BigUint::one();
-    
+
     for i in 0..k {
         numerator *= n - i;
         denominator *= i + 1;
     }
-    
+
     numerator / denominator
 }
 

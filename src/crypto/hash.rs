@@ -1,13 +1,13 @@
 // Hash function abstractions
 
-use sha2::{Sha256, Digest};
+use sha2::{Digest, Sha256};
 use sha3::Sha3_256;
 
 /// Trait for hash functions
 pub trait HashFunction {
     /// Hash input data
     fn hash(&self, data: &[u8]) -> Vec<u8>;
-    
+
     /// Get output size in bytes
     fn output_size(&self) -> usize;
 }
@@ -27,7 +27,7 @@ impl HashFunction for SHA256 {
         hasher.update(data);
         hasher.finalize().to_vec()
     }
-    
+
     fn output_size(&self) -> usize {
         32
     }
@@ -48,7 +48,7 @@ impl HashFunction for SHA3_256 {
         hasher.update(data);
         hasher.finalize().to_vec()
     }
-    
+
     fn output_size(&self) -> usize {
         32
     }

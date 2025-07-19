@@ -59,19 +59,16 @@ impl Hypercube {
         // In production, we'd use the mapping functions
         let w = self.w;
         let v = self.v;
-        
-        AllVertices::new(w, v)
-            .filter(move |vertex| {
-                let sum: usize = vertex.components.iter().sum();
-                v * w - sum == layer
-            })
+
+        AllVertices::new(w, v).filter(move |vertex| {
+            let sum: usize = vertex.components.iter().sum();
+            v * w - sum == layer
+        })
     }
 
     /// Calculates the distance from a vertex to the sink
     pub fn distance_from_sink(&self, vertex: &Vertex) -> usize {
-        vertex.components.iter()
-            .map(|&x| self.w - x)
-            .sum()
+        vertex.components.iter().map(|&x| self.w - x).sum()
     }
 }
 
@@ -94,9 +91,7 @@ impl Vertex {
     /// Checks if this vertex is less than or equal to another (component-wise)
     pub fn le(&self, other: &Self) -> bool {
         self.components.len() == other.components.len()
-            && self.components.iter()
-                .zip(other.components.iter())
-                .all(|(&x, &y)| x <= y)
+            && self.components.iter().zip(other.components.iter()).all(|(&x, &y)| x <= y)
     }
 }
 
@@ -110,12 +105,7 @@ struct AllVertices {
 
 impl AllVertices {
     fn new(w: usize, v: usize) -> Self {
-        AllVertices {
-            w,
-            v,
-            current: vec![1; v],
-            finished: false,
-        }
+        AllVertices { w, v, current: vec![1; v], finished: false }
     }
 }
 
