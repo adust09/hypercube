@@ -42,6 +42,10 @@ impl WotsPublicKey {
         &self.chains
     }
 
+    pub fn params(&self) -> &WotsParams {
+        &self.params
+    }
+
     /// Verify a signature
     pub fn verify(&self, message_digest: &[usize], signature: &WotsSignature) -> bool {
         if message_digest.len() != self.params.chains {
@@ -128,8 +132,25 @@ impl WotsKeypair {
         &self.secret_key
     }
 
+    /// Sign a message with encoding
+    pub fn sign<E: crate::core::encoding::EncodingScheme>(&self, message: &[u8], encoding: &E) -> WotsSignature {
+        use crate::crypto::random::{OsSecureRandom, SecureRandom};
+        
+        // Generate randomness
+        let mut rng = OsSecureRandom::new();
+        let randomness = rng.random_bytes(32);
+        
+        // Encode message to hypercube vertex
+        let vertex = encoding.encode(message, &randomness);
+        
+        // Get message digits - the vertex components are the message digest
+        let message_digest: Vec<usize> = vertex.components().clone();
+        
+        self.sign_raw(&message_digest)
+    }
+
     /// Sign a message digest
-    pub fn sign(&self, message_digest: &[usize]) -> WotsSignature {
+    pub fn sign_raw(&self, message_digest: &[usize]) -> WotsSignature {
         assert_eq!(
             message_digest.len(),
             self.params.chains,
