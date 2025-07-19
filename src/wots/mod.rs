@@ -206,6 +206,10 @@ impl WotsSignature {
     pub fn chains(&self) -> &[Vec<u8>] {
         &self.chains
     }
+    
+    pub fn from_chains(chains: Vec<Vec<u8>>) -> Self {
+        WotsSignature { chains }
+    }
 }
 
 /// Compute hash chain H^k(x)

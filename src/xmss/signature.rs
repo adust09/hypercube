@@ -61,14 +61,26 @@ impl XMSSSignature {
         bytes
     }
 
-    pub fn from_bytes(bytes: &[u8], _params: &XMSSParams) -> Result<Self, String> {
-        if bytes.len() < 36 {
-            return Err("Invalid signature length".to_string());
+    pub fn from_bytes(bytes: &[u8], params: &XMSSParams) -> Result<Self, String> {
+        let hash_size = 32; // SHA256 output size
+        let wots_chains = params.len(); // Number of WOTS chains
+        let tree_height = params.tree_height();
+        
+        // Calculate expected size
+        let expected_size = 4 + 32 + (wots_chains * hash_size) + (tree_height * hash_size);
+        
+        if bytes.len() != expected_size {
+            return Err(format!(
+                "Invalid signature length: expected {}, got {}",
+                expected_size,
+                bytes.len()
+            ));
         }
         
         let mut offset = 0;
         
-        let _leaf_index = u32::from_be_bytes([
+        // Parse leaf index
+        let leaf_index = u32::from_be_bytes([
             bytes[offset],
             bytes[offset + 1],
             bytes[offset + 2],
@@ -76,9 +88,33 @@ impl XMSSSignature {
         ]) as usize;
         offset += 4;
         
-        let _randomness = bytes[offset..offset + 32].to_vec();
-        let _ = offset + 32;
+        // Parse randomness
+        let randomness = bytes[offset..offset + 32].to_vec();
+        offset += 32;
         
-        Err("Not fully implemented".to_string())
+        // Parse WOTS signature chains
+        let mut wots_chains = Vec::with_capacity(wots_chains);
+        for _ in 0..params.len() {
+            let chain = bytes[offset..offset + hash_size].to_vec();
+            wots_chains.push(chain);
+            offset += hash_size;
+        }
+        let wots_signature = crate::wots::WotsSignature::from_chains(wots_chains);
+        
+        // Parse authentication path nodes
+        let mut auth_nodes = Vec::with_capacity(tree_height);
+        for _ in 0..tree_height {
+            let node = bytes[offset..offset + hash_size].to_vec();
+            auth_nodes.push(node);
+            offset += hash_size;
+        }
+        let auth_path = AuthPath::new(auth_nodes);
+        
+        Ok(XMSSSignature {
+            leaf_index,
+            randomness,
+            wots_signature,
+            auth_path,
+        })
     }
 }
