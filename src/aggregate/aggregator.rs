@@ -1,7 +1,7 @@
 use plonky2::field::types::Field;
 use plonky2::hash::hash_types::HashOut;
 use plonky2::hash::poseidon::PoseidonHash;
-use plonky2::iop::witness::PartialWitness;
+use plonky2::iop::witness::{PartialWitness, WitnessWrite};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 use plonky2::plonk::circuit_data::CircuitConfig;
 use plonky2::plonk::config::Hasher;
@@ -10,6 +10,16 @@ use crate::aggregate::{AggregateError, AggregateProof, C, D, F, PublicInputs, Si
 use crate::core::encoding::EncodingScheme;
 use crate::crypto::hash::HashFunction;
 use crate::crypto::poseidon2::Poseidon2Hash;
+use crate::aggregate::aggregator_full;
+
+/// Targets for a single signature verification
+struct SignatureTargets {
+    signature: Vec<HashOutTarget>,
+    public_key: Vec<HashOutTarget>,
+    message_hash: HashOutTarget,
+}
+
+use plonky2::hash::hash_types::HashOutTarget;
 
 /// Aggregates multiple signatures into a single ZK proof
 pub struct Aggregator {
@@ -39,14 +49,17 @@ impl Aggregator {
         let public_inputs = self.create_public_inputs(bundle, message_hash)?;
         
         // Add public input targets
-        let _public_input_targets = self.register_public_inputs(&mut builder, &public_inputs);
+        let public_input_targets = self.register_public_inputs(&mut builder, &public_inputs);
+        
+        // Store signature and verification targets
+        let mut all_targets = Vec::new();
         
         // Add signature verification logic for each signature
         for (i, (signature, public_key)) in bundle.signatures.iter()
             .zip(bundle.public_keys.iter())
             .enumerate()
         {
-            self.add_signature_verification(
+            let targets = self.add_signature_verification(
                 &mut builder,
                 i,
                 signature,
@@ -54,16 +67,33 @@ impl Aggregator {
                 &message_hash,
                 scheme,
             )?;
+            all_targets.push(targets);
         }
         
         // Build the circuit
         let data = builder.build::<C>();
         
-        // Create witness
-        let pw = PartialWitness::new();
+        // Create witness and set values
+        let mut pw = PartialWitness::new();
         
         // Set public inputs
-        // Note: In a complete implementation, we would set the actual public input targets
+        let public_elements = public_inputs.to_field_elements();
+        for (i, &target) in public_input_targets.iter().enumerate() {
+            if i < public_elements.len() {
+                pw.set_target(target, public_elements[i]);
+            }
+        }
+        
+        // Set witness values for each signature verification
+        for (i, targets) in all_targets.iter().enumerate() {
+            self.set_signature_witness(
+                &mut pw,
+                targets,
+                &bundle.signatures[i],
+                &bundle.public_keys[i],
+                &message_hash,
+            );
+        }
         
         // Generate the proof
         let proof = data.prove(pw)
@@ -165,23 +195,92 @@ impl Aggregator {
         &self,
         builder: &mut CircuitBuilder<F, D>,
         _index: usize,
-        _signature: &crate::wots::WotsSignature,
-        _public_key: &crate::wots::WotsPublicKey,
+        signature: &crate::wots::WotsSignature,
+        public_key: &crate::wots::WotsPublicKey,
         _message_hash: &HashOut<F>,
-        _scheme: &dyn EncodingScheme,
-    ) -> Result<(), AggregateError> {
-        // This is a placeholder for the actual signature verification logic
-        // In a complete implementation, this would:
-        // 1. Encode the message using the scheme
-        // 2. Verify each WOTS chain
-        // 3. Assert that all verifications pass
+        scheme: &dyn EncodingScheme,
+    ) -> Result<SignatureTargets, AggregateError> {
+        // Create targets for signature chains
+        let signature_targets: Vec<_> = signature.chains()
+            .iter()
+            .map(|_| builder.add_virtual_hash())
+            .collect();
         
-        // For now, we'll add a simple constraint to make the circuit non-trivial
-        let dummy_target = builder.add_virtual_target();
-        let one = builder.one();
-        builder.connect(dummy_target, one);
+        // Create targets for public key chains
+        let public_key_targets: Vec<_> = public_key.chains()
+            .iter()
+            .map(|_| builder.add_virtual_hash())
+            .collect();
         
-        Ok(())
+        // Create message hash target
+        let message_hash_target = builder.add_virtual_hash();
+        
+        // Use the complete signature verification
+        aggregator_full::add_complete_signature_verification(
+            builder,
+            &signature_targets,
+            &public_key_targets,
+            message_hash_target,
+            scheme,
+            scheme.name(),
+        )?;
+        
+        Ok(SignatureTargets {
+            signature: signature_targets,
+            public_key: public_key_targets,
+            message_hash: message_hash_target,
+        })
+    }
+    
+    /// Set witness values for signature verification
+    fn set_signature_witness(
+        &self,
+        witness: &mut PartialWitness<F>,
+        targets: &SignatureTargets,
+        signature: &crate::wots::WotsSignature,
+        public_key: &crate::wots::WotsPublicKey,
+        message_hash: &HashOut<F>,
+    ) {
+        // Set message hash
+        witness.set_hash_target(targets.message_hash, *message_hash);
+        
+        // Set signature chains
+        for (i, chain) in signature.chains().iter().enumerate() {
+            if i < targets.signature.len() {
+                let hash_out = Self::bytes_to_hash_out(chain);
+                witness.set_hash_target(targets.signature[i], hash_out);
+            }
+        }
+        
+        // Set public key chains
+        for (i, chain) in public_key.chains().iter().enumerate() {
+            if i < targets.public_key.len() {
+                let hash_out = Self::bytes_to_hash_out(chain);
+                witness.set_hash_target(targets.public_key[i], hash_out);
+            }
+        }
+    }
+    
+    /// Convert bytes to HashOut
+    fn bytes_to_hash_out(bytes: &[u8]) -> HashOut<F> {
+        let mut elements = Vec::new();
+        
+        for chunk in bytes.chunks(8) {
+            let mut value = 0u64;
+            for (i, &byte) in chunk.iter().enumerate() {
+                value |= (byte as u64) << (i * 8);
+            }
+            elements.push(F::from_canonical_u64(value));
+        }
+        
+        // Ensure we have exactly 4 elements
+        while elements.len() < 4 {
+            elements.push(F::ZERO);
+        }
+        
+        HashOut {
+            elements: [elements[0], elements[1], elements[2], elements[3]],
+        }
     }
 }
 

@@ -168,6 +168,10 @@ impl EncodingScheme for TL1C {
     fn dimension(&self) -> usize {
         self.config.v
     }
+    
+    fn name(&self) -> &str {
+        "TL1C"
+    }
 }
 
 impl NonUniformMapping for TL1C {

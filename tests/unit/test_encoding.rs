@@ -23,6 +23,10 @@ fn test_encoding_trait() {
         fn dimension(&self) -> usize {
             self.v
         }
+        
+        fn name(&self) -> &str {
+            "TestEncoding"
+        }
     }
     
     let encoding = TestEncoding { w: 4, v: 3 };
@@ -156,6 +160,10 @@ fn test_target_collision_resistance() {
         
         fn dimension(&self) -> usize {
             self.v
+        }
+        
+        fn name(&self) -> &str {
+            "HashBasedEncoding"
         }
     }
     

@@ -12,6 +12,9 @@ pub trait EncodingScheme {
 
     /// Get the dimension v
     fn dimension(&self) -> usize;
+    
+    /// Get the name of the encoding scheme
+    fn name(&self) -> &str;
 }
 
 /// Trait for non-uniform mapping functions

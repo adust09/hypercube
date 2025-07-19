@@ -182,6 +182,10 @@ impl EncodingScheme for TLFC {
     fn dimension(&self) -> usize {
         self.config.v
     }
+    
+    fn name(&self) -> &str {
+        "TLFC"
+    }
 }
 
 impl NonUniformMapping for TLFC {

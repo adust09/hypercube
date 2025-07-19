@@ -4,6 +4,7 @@ use plonky2::iop::target::{BoolTarget, Target};
 use plonky2::plonk::circuit_builder::CircuitBuilder;
 
 use crate::zk::circuit::poseidon2_wots::Poseidon2WotsGadget;
+use crate::zk::circuit::encoding_constraints::EncodingConstraints;
 
 /// Circuit for batch verification of multiple WOTS signatures
 pub struct BatchVerifyCircuit;
@@ -40,29 +41,66 @@ impl BatchVerifyCircuit {
     
     /// Add constraints for message encoding verification
     pub fn add_encoding_constraints<F: RichField + Extendable<D>, const D: usize>(
-        _builder: &mut CircuitBuilder<F, D>,
-        _message_hash: HashOutTarget,
-        _message_digits: &[Vec<Target>],
+        builder: &mut CircuitBuilder<F, D>,
+        message_hash: HashOutTarget,
+        message_digits: &[Vec<Target>],
         encoding_type: &str,
+        w: usize,
+        v: usize,
     ) {
-        // This is a placeholder for encoding verification
-        // In a complete implementation, this would verify that the message
-        // was correctly encoded according to the TSL/TL1C/TLFC scheme
-        
-        match encoding_type {
-            "TSL" => {
-                // TSL maps to a single layer
-                // Add constraints to verify the mapping
+        // For each signature, verify the encoding constraints
+        for digits in message_digits {
+            match encoding_type {
+                "TSL" => {
+                    // TSL maps to a single layer - use default parameters for now
+                    let d0 = v * (w - 1) / 2; // Middle layer
+                    let valid = EncodingConstraints::add_tsl_constraints(
+                        builder,
+                        message_hash,
+                        digits,
+                        w,
+                        v,
+                        d0,
+                    );
+                    builder.assert_one(valid.target);
+                }
+                "TL1C" => {
+                    // TL1C maps to multiple layers with 1-chain checksum
+                    let d0 = v * (w - 1) / 3;
+                    let checksum = builder.add_virtual_target();
+                    let valid = EncodingConstraints::add_tl1c_constraints(
+                        builder,
+                        message_hash,
+                        digits,
+                        checksum,
+                        w,
+                        v,
+                        d0,
+                    );
+                    builder.assert_one(valid.target);
+                }
+                "TLFC" => {
+                    // TLFC maps to multiple layers with full checksum
+                    let d0 = v * (w - 1) / 3;
+                    let c = 4; // Number of checksum chains
+                    let mut checksums = Vec::new();
+                    for _ in 0..c {
+                        checksums.push(builder.add_virtual_target());
+                    }
+                    let valid = EncodingConstraints::add_tlfc_constraints(
+                        builder,
+                        message_hash,
+                        digits,
+                        &checksums,
+                        w,
+                        v,
+                        d0,
+                        c,
+                    );
+                    builder.assert_one(valid.target);
+                }
+                _ => panic!("Unknown encoding type"),
             }
-            "TL1C" => {
-                // TL1C maps to multiple layers with 1-chain checksum
-                // Add constraints for layer mapping and checksum
-            }
-            "TLFC" => {
-                // TLFC maps to multiple layers with full checksum
-                // Add constraints for layer mapping and full checksum
-            }
-            _ => panic!("Unknown encoding type"),
         }
     }
     
@@ -114,6 +152,8 @@ impl BatchVerifyCircuit {
             message_hash,
             &message_digit_targets,
             encoding_type,
+            w,
+            chains_per_signature, // Using chains_per_signature as v (dimension)
         );
         
         // Add batch verification constraints

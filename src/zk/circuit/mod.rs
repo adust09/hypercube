@@ -1,6 +1,7 @@
 pub mod batch_verify;
 pub mod hypercube;
 pub mod poseidon2_wots;
+pub mod encoding_constraints;
 
 use plonky2::field::extension::Extendable;
 use plonky2::hash::hash_types::RichField;

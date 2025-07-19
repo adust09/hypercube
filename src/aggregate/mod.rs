@@ -1,4 +1,6 @@
 pub mod aggregator;
+pub mod aggregator_full;
+pub mod aggregator_simple;
 pub mod signature_set;
 pub mod verifier;
 

@@ -145,6 +145,10 @@ impl EncodingScheme for TSL {
     fn dimension(&self) -> usize {
         self.config.v
     }
+    
+    fn name(&self) -> &str {
+        "TSL"
+    }
 }
 
 impl NonUniformMapping for TSL {
