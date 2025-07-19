@@ -16,6 +16,8 @@ rand = "0.8"
 num-bigint = "0.4"
 num-traits = "0.2"
 thiserror = "1.0"
+plonky2 = "0.2"
+plonky2_field = "0.2"
 
 [dev-dependencies]
 criterion = "0.5"

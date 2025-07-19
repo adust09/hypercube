@@ -54,3 +54,7 @@ This work achieves 20-40% verification cost reduction over previous Winternitz s
 ## Japanese Project Notes
 
 - このプロジェクトはpaperの定義対して厳密な実装をするのが目的です。
+
+## Zero-Knowledge Proof Notes
+
+- ゼロ知識証明を利用するのは署名を集約するのが目的であり、署名者のプライバシー保護（誰が署名したか分からない）を担保する必要はない
