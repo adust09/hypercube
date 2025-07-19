@@ -42,6 +42,14 @@ impl WotsPublicKey {
         &self.chains
     }
 
+    pub fn params(&self) -> &WotsParams {
+        &self.params
+    }
+    
+    pub fn from_chains(chains: Vec<Vec<u8>>, params: WotsParams) -> Self {
+        WotsPublicKey { chains, params }
+    }
+
     /// Verify a signature
     pub fn verify(&self, message_digest: &[usize], signature: &WotsSignature) -> bool {
         if message_digest.len() != self.params.chains {
@@ -56,12 +64,12 @@ impl WotsPublicKey {
         let hasher = SHA256::new();
         for i in 0..self.params.chains {
             let x_i = message_digest[i];
-            if x_i < 1 || x_i > self.params.w {
+            if x_i >= self.params.w {
                 return false;
             }
 
-            // Compute H^{w-x_i}(σ_i)
-            let iterations = self.params.w - x_i;
+            // Compute H^{w-1-x_i}(σ_i)
+            let iterations = self.params.w - 1 - x_i;
             let computed = hash_chain(&hasher, &signature.chains[i], iterations);
 
             if computed != self.chains[i] {
@@ -82,6 +90,10 @@ pub struct WotsSecretKey {
 impl WotsSecretKey {
     pub fn chains(&self) -> &[Vec<u8>] {
         &self.chains
+    }
+    
+    pub fn from_chains(chains: Vec<Vec<u8>>) -> Self {
+        WotsSecretKey { chains }
     }
 }
 
@@ -119,6 +131,14 @@ impl WotsKeypair {
             params: params.clone(),
         }
     }
+    
+    pub fn from_components(public_key: WotsPublicKey, secret_key: WotsSecretKey, params: WotsParams) -> Self {
+        WotsKeypair {
+            public_key,
+            secret_key,
+            params,
+        }
+    }
 
     pub fn public_key(&self) -> &WotsPublicKey {
         &self.public_key
@@ -128,8 +148,27 @@ impl WotsKeypair {
         &self.secret_key
     }
 
+    /// Sign a message with encoding
+    pub fn sign<E: crate::core::encoding::EncodingScheme>(&self, message: &[u8], encoding: &E) -> WotsSignature {
+        // For deterministic encoding, use zeros as randomness
+        // The message itself provides the entropy
+        let randomness = [0u8; 32];
+        
+        // Encode message to hypercube vertex
+        let vertex = encoding.encode(message, &randomness);
+        
+        // Get message digits - the vertex components are the message digest
+        // Convert from [1, w] range to [0, w-1] range for signing
+        let message_digest: Vec<usize> = vertex.components()
+            .iter()
+            .map(|&x| x.saturating_sub(1))
+            .collect();
+        
+        self.sign_raw(&message_digest)
+    }
+
     /// Sign a message digest
-    pub fn sign(&self, message_digest: &[usize]) -> WotsSignature {
+    pub fn sign_raw(&self, message_digest: &[usize]) -> WotsSignature {
         assert_eq!(
             message_digest.len(),
             self.params.chains,
@@ -142,14 +181,14 @@ impl WotsKeypair {
         for i in 0..self.params.chains {
             let x_i = message_digest[i];
             assert!(
-                x_i >= 1 && x_i <= self.params.w,
-                "Message digit {} out of range [1, {}]",
+                x_i < self.params.w,
+                "Message digit {} out of range [0, {})",
                 x_i,
                 self.params.w
             );
 
-            // Compute σ_i = H^{x_i-1}(sk_i)
-            let sig_i = hash_chain(&hasher, &self.secret_key.chains[i], x_i - 1);
+            // Compute σ_i = H^{x_i}(sk_i)
+            let sig_i = hash_chain(&hasher, &self.secret_key.chains[i], x_i);
             sig_chains.push(sig_i);
         }
 
@@ -166,6 +205,10 @@ pub struct WotsSignature {
 impl WotsSignature {
     pub fn chains(&self) -> &[Vec<u8>] {
         &self.chains
+    }
+    
+    pub fn from_chains(chains: Vec<Vec<u8>>) -> Self {
+        WotsSignature { chains }
     }
 }
 
