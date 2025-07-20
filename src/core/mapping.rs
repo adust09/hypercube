@@ -10,7 +10,7 @@ use num_traits::{CheckedSub, One, ToPrimitive, Zero};
 /// Maps a vertex in layer d to an integer in [0, ℓ_d)
 /// Paper Section 4.3: Bijective mapping from layer d vertices to {0, 1, ..., ℓ_d - 1}
 /// This is essential for constructing the non-uniform mapping Ψ in the signature schemes.
-/// 
+///
 /// For vertex a = (a₁, ..., aᵥ) in layer d, this maps it to an integer
 /// in [0, ℓ_d) according to the paper's MapToInteger algorithm.
 pub fn vertex_to_integer(
@@ -147,8 +147,11 @@ pub enum MappingError {
 /// Maps an integer in [0, ℓ_d) to a vertex in layer d
 /// Paper Section 4.3: Inverse of the vertex-to-integer bijection.
 /// This allows uniform sampling from layer d by mapping random integers.
+///
+/// Given an integer x ∈ [0, ℓ_d), this constructs the corresponding vertex
+/// in layer d according to the paper's MapToVertex algorithm.
 pub fn integer_to_vertex(
-    i: usize,
+    x: usize,
     w: usize,
     v: usize,
     d: usize,
@@ -156,23 +159,10 @@ pub fn integer_to_vertex(
     let layer_size_big = calculate_layer_size_exact(d, v, w,)?;
     let layer_size = layer_size_big.to_usize().ok_or(MappingError::IntegerOverflow,)?;
 
-    if i >= layer_size {
-        return Err(MappingError::IndexOutOfRange { index: i, max: layer_size, },);
+    if x >= layer_size {
+        return Err(MappingError::IndexOutOfRange { index: x, max: layer_size, },);
     }
 
-    integer_to_vertex_paper_exact(i, w, v, d,)
-}
-
-/// Exact integer-to-vertex mapping implementation from the paper
-/// Paper Section 4.3: MapToVertex algorithm.
-/// Given an integer x ∈ [0, ℓ_d), this constructs the corresponding vertex
-/// in layer d according to the paper's algorithm.
-fn integer_to_vertex_paper_exact(
-    x: usize,
-    w: usize,
-    v: usize,
-    d: usize,
-) -> Result<Vec<usize,>, MappingError,> {
     let mut vertex = vec![0; v];
     let mut x_i = x;
     let mut d_i = d;
