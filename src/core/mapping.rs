@@ -10,34 +10,10 @@ use num_traits::{CheckedSub, One, ToPrimitive, Zero};
 /// Maps a vertex in layer d to an integer in [0, ℓ_d)
 /// Paper Section 4.3: Bijective mapping from layer d vertices to {0, 1, ..., ℓ_d - 1}
 /// This is essential for constructing the non-uniform mapping Ψ in the signature schemes.
-pub fn vertex_to_integer(
-    vertex: &[usize],
-    w: usize,
-    v: usize,
-    d: usize,
-) -> Result<usize, MappingError,> {
-    // Verify the vertex is in the correct layer
-    let layer = v * w - vertex.iter().sum::<usize>();
-    if layer != d {
-        return Err(MappingError::InvalidLayer { expected: d, actual: layer, },);
-    }
-
-    // Validate coordinates are in range [1, w]
-    for (i, &coord,) in vertex.iter().enumerate() {
-        if coord < 1 || coord > w {
-            return Err(MappingError::InvalidCoordinate { position: i, value: coord, max: w, },);
-        }
-    }
-
-    // Use the exact vertex-to-integer mapping from the paper
-    vertex_to_integer_paper_exact(vertex, w, v, d,)
-}
-
-/// Exact vertex-to-integer mapping implementation from the paper
-/// Paper Section 4.3: MapToInteger algorithm.
+/// 
 /// For vertex a = (a₁, ..., aᵥ) in layer d, this maps it to an integer
-/// in [0, ℓ_d) according to the paper's algorithm.
-fn vertex_to_integer_paper_exact(
+/// in [0, ℓ_d) according to the paper's MapToInteger algorithm.
+pub fn vertex_to_integer(
     vertex: &[usize],
     w: usize,
     v: usize,
@@ -46,6 +22,13 @@ fn vertex_to_integer_paper_exact(
     // Verify input vertex is valid
     if vertex.len() != v {
         return Err(MappingError::InvalidLayer { expected: d, actual: 0, },);
+    }
+
+    // Validate coordinates are in range [1, w]
+    for (i, &coord,) in vertex.iter().enumerate() {
+        if coord < 1 || coord > w {
+            return Err(MappingError::InvalidCoordinate { position: i, value: coord, max: w, },);
+        }
     }
 
     // Initialize x_v := 0 and d_v := w - a_v
