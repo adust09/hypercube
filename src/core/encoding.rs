@@ -37,6 +37,7 @@ pub trait NonUniformMapping {
 /// Paper Definition 10: μ_ℓ²(f) = Σ_{x ∈ [w]^v} Pr[Ψ(z) = x]²
 /// This metric measures the collision resistance of the encoding.
 /// Lower values indicate better security properties.
+#[allow(dead_code)]
 pub fn calculate_collision_metric(mapping: &dyn NonUniformMapping, v: usize, w: usize,) -> f64 {
     use crate::core::hypercube::Hypercube;
 
@@ -206,6 +207,7 @@ mod tests {
     }
 
     #[test]
+    #[allow(dead_code)]
     fn test_collision_metric() {
         // Test collision metric calculation
 

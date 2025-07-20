@@ -13,6 +13,7 @@ use num_traits::{CheckedSub, One, ToPrimitive, Zero};
 ///
 /// For vertex a = (a₁, ..., aᵥ) in layer d, this maps it to an integer
 /// in [0, ℓ_d) according to the paper's MapToInteger algorithm.
+/// TODO: don't need MapToInteger for sign/verify?
 pub fn vertex_to_integer(
     vertex: &[usize],
     w: usize,
