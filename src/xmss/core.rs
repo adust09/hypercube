@@ -289,3 +289,48 @@ fn base_w_from_bytes(bytes: &[u8], w: usize, out_len: usize,) -> Vec<usize,> {
 
     result
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_xmss_params_creation() {
+        let params = XMSSParams::new(10, 67, 16,);
+        assert_eq!(params.tree_height(), 10);
+        assert_eq!(params.winternitz_parameter(), 67);
+        assert_eq!(params.len(), 16);
+        assert_eq!(params.total_tree_height(), 10);
+    }
+
+    #[test]
+    fn test_xmss_with_different_tree_heights() {
+        let heights = vec![2, 3, 4, 5, 10];
+
+        for h in heights {
+            let params = XMSSParams::new(h, 67, 16,);
+            assert_eq!(params.tree_height(), h);
+            assert_eq!(params.winternitz_parameter(), 67);
+            assert_eq!(params.total_tree_height(), h);
+        }
+    }
+
+    #[test]
+    fn test_xmss_hypercube_wots_integration() {
+        let params = XMSSParams::new_with_hypercube(4, 128, true,);
+        assert_eq!(params.tree_height(), 4);
+        // Hypercube WOTS optimization should result in fewer chains than standard w=67
+        // The hypercube optimization is enabled through new_with_hypercube
+        assert!(params.len() < 67); // Optimized chain count should be less than standard w=67
+    }
+
+    #[test]
+    fn test_xmss_deterministic_params() {
+        let params1 = XMSSParams::new(4, 67, 16,);
+        let params2 = XMSSParams::new(4, 67, 16,);
+
+        assert_eq!(params1.tree_height(), params2.tree_height());
+        assert_eq!(params1.winternitz_parameter(), params2.winternitz_parameter());
+        assert_eq!(params1.len(), params2.len());
+    }
+}

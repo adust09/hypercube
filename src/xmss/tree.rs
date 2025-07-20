@@ -109,3 +109,65 @@ fn hash_tree_node<H: HashFunction,>(
 
     hasher.hash(&data,)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::crypto::hash::{HashFunction, SHA256};
+
+    #[test]
+    fn test_merkle_tree_construction() {
+        let params = crate::xmss::XMSSParams::new(3, 67, 16,);
+        let num_leaves = 1 << params.tree_height();
+        let mut leaves = Vec::new();
+
+        for i in 0..num_leaves {
+            let leaf_data = format!("leaf_{}", i);
+            leaves.push(SHA256::new().hash(leaf_data.as_bytes(),),);
+        }
+
+        let tree = MerkleTree::build(&leaves, &[0u8; 32], &SHA256::new(),);
+        assert_eq!(tree.root().len(), 32);
+        assert_eq!(tree.height(), 3);
+    }
+
+    #[test]
+    fn test_authentication_path_generation() {
+        let params = crate::xmss::XMSSParams::new(3, 67, 16,);
+        let num_leaves = 1 << params.tree_height();
+        let mut leaves = Vec::new();
+
+        for i in 0..num_leaves {
+            let leaf_data = format!("leaf_{}", i);
+            leaves.push(SHA256::new().hash(leaf_data.as_bytes(),),);
+        }
+
+        let tree = MerkleTree::build(&leaves, &[0u8; 32], &SHA256::new(),);
+        let auth_path = tree.authentication_path(0,);
+
+        assert_eq!(auth_path.nodes().len(), 3);
+    }
+
+    #[test]
+    fn test_authentication_path_verification() {
+        let params = crate::xmss::XMSSParams::new(3, 67, 16,);
+        let num_leaves = 1 << params.tree_height();
+        let mut leaves = Vec::new();
+        let hasher = SHA256::new();
+
+        for i in 0..num_leaves {
+            let leaf_data = format!("leaf_{}", i);
+            leaves.push(hasher.hash(leaf_data.as_bytes(),),);
+        }
+
+        let public_seed = [0u8; 32];
+        let tree = MerkleTree::build(&leaves, &public_seed, &hasher,);
+
+        for leaf_idx in 0..num_leaves {
+            let auth_path = tree.authentication_path(leaf_idx,);
+            let computed_root =
+                auth_path.compute_root(&leaves[leaf_idx], leaf_idx, &public_seed, &hasher,);
+            assert_eq!(computed_root, tree.root());
+        }
+    }
+}

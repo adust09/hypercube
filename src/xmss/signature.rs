@@ -108,3 +108,36 @@ impl XMSSSignature {
         Ok(XMSSSignature { leaf_index, randomness, wots_signature, auth_path, },)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::xmss::{XMSSKeypair, XMSSParams};
+
+    #[test]
+    fn test_xmss_signature_serialization() {
+        let params = XMSSParams::new(4, 67, 16,);
+        let mut keypair = XMSSKeypair::generate(&params,);
+        let message = b"Test message";
+
+        let signature = keypair.sign(message,);
+        let serialized = signature.to_bytes();
+        let deserialized = XMSSSignature::from_bytes(&serialized, &params,).unwrap();
+
+        assert!(keypair.public_key().verify(message, &deserialized, keypair.params()));
+    }
+
+    #[test]
+    fn test_xmss_signature_components() {
+        let params = XMSSParams::new(4, 67, 16,);
+        let mut keypair = XMSSKeypair::generate(&params,);
+        let message = b"Component test";
+
+        let signature = keypair.sign(message,);
+
+        assert_eq!(signature.leaf_index(), 0);
+        assert_eq!(signature.randomness().len(), 32);
+        assert_eq!(signature.auth_path().nodes().len(), 4);
+        assert!(signature.wots_signature().chains().len() > 0);
+    }
+}

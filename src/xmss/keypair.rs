@@ -119,3 +119,91 @@ impl XMSSKeypair {
         XMSSKeypair { public_key, private_key, params: params.clone(), }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::xmss::XMSSParams;
+
+    #[test]
+    fn test_xmss_keypair_generation() {
+        let params = XMSSParams::new(4, 67, 16,);
+        let keypair = XMSSKeypair::generate(&params,);
+
+        assert_eq!(keypair.private_key().leaf_index(), 0);
+        assert_eq!(keypair.public_key().root().len(), 32);
+        assert_eq!(keypair.public_key().public_seed().len(), 32);
+    }
+
+    #[test]
+    fn test_xmss_sign_and_verify_single_message() {
+        let params = XMSSParams::new(4, 67, 16,);
+        let mut keypair = XMSSKeypair::generate(&params,);
+        let message = b"Hello, XMSS!";
+
+        let signature = keypair.sign(message,);
+        assert!(keypair.public_key().verify(message, &signature, keypair.params()));
+
+        assert_eq!(keypair.private_key().leaf_index(), 1);
+    }
+
+    #[test]
+    fn test_xmss_sign_multiple_messages() {
+        let params = XMSSParams::new(4, 67, 16,);
+        let mut keypair = XMSSKeypair::generate(&params,);
+        let max_signatures = 1 << params.tree_height();
+
+        for i in 0..max_signatures {
+            let message = format!("Message {}", i);
+            let signature = keypair.sign(message.as_bytes(),);
+            assert!(keypair.public_key().verify(message.as_bytes(), &signature, keypair.params()));
+            assert_eq!(keypair.private_key().leaf_index(), i + 1);
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "XMSS key exhausted")]
+    fn test_xmss_key_exhaustion() {
+        let params = XMSSParams::new(2, 67, 16,);
+        let mut keypair = XMSSKeypair::generate(&params,);
+        let max_signatures = 1 << params.tree_height();
+
+        for i in 0..=max_signatures {
+            let message = format!("Message {}", i);
+            keypair.sign(message.as_bytes(),);
+        }
+    }
+
+    #[test]
+    fn test_xmss_deterministic_key_generation() {
+        let params = XMSSParams::new(4, 67, 16,);
+        let seed = [42u8; 96];
+
+        let keypair1 = XMSSKeypair::generate_from_seed(&params, &seed,);
+        let keypair2 = XMSSKeypair::generate_from_seed(&params, &seed,);
+
+        assert_eq!(keypair1.public_key().root(), keypair2.public_key().root());
+        assert_eq!(keypair1.public_key().public_seed(), keypair2.public_key().public_seed());
+    }
+
+    #[test]
+    fn test_xmss_state_persistence() {
+        let params = XMSSParams::new(4, 67, 16,);
+        let mut keypair = XMSSKeypair::generate(&params,);
+
+        keypair.sign(b"Message 1",);
+        keypair.sign(b"Message 2",);
+
+        let state = keypair.private_key().export_state();
+        let mut restored_keypair = XMSSKeypair::restore(&params, state,);
+
+        assert_eq!(restored_keypair.private_key().leaf_index(), 2);
+
+        let signature = restored_keypair.sign(b"Message 3",);
+        assert!(restored_keypair.public_key().verify(
+            b"Message 3",
+            &signature,
+            restored_keypair.params()
+        ));
+    }
+}
