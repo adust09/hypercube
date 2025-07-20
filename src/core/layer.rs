@@ -8,7 +8,7 @@ use num_bigint::BigUint;
 use num_traits::{One, Zero};
 
 /// Calculate the layer of a vertex: d = vw - Σx_i
-/// Paper Equation (1) (Section 2.1): d = vw - Σᵢ₌₁ᵛ xᵢ
+/// (Section 2.1): d = vw - Σᵢ₌₁ᵛ xᵢ
 /// This function computes which layer a vertex belongs to based on
 /// the sum of its components.
 pub fn calculate_layer(vertex: &[usize], w: usize,) -> usize {

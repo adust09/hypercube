@@ -56,7 +56,7 @@ impl Hypercube {
     }
 
     /// Calculates the layer of a vertex: d = vw - Σx_i
-    /// Paper Equation (1) (Section 2.1): The layer of vertex x is d = vw - Σᵢ₌₁ᵛ xᵢ
+    /// (Section 2.1): The layer of vertex x is d = vw - Σᵢ₌₁ᵛ xᵢ
     /// This partitions the hypercube into disjoint layers based on distance from sink
     pub fn calculate_layer(&self, vertex: &Vertex,) -> usize {
         let sum: usize = vertex.components.iter().sum();
