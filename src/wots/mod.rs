@@ -1,6 +1,5 @@
 // Winternitz One-Time Signature implementation
 //
-// Paper: "At the Top of the Hypercube" Section 3
 // This module implements the standard WOTS signature scheme that is
 // integrated with the hypercube-based encoding schemes.
 
@@ -8,7 +7,7 @@ use crate::crypto::hash::{HashFunction, SHA256};
 use crate::crypto::random::{OsSecureRandom, SecureRandom};
 
 /// WOTS parameters
-/// Paper Section 3: WOTS parameters derived from hypercube scheme
+/// WOTS parameters derived from hypercube scheme
 #[derive(Debug, Clone,)]
 pub struct WotsParams {
     w: usize,
@@ -36,7 +35,7 @@ impl WotsParams {
 }
 
 /// WOTS public key
-/// Paper Section 3: pk = (pk₁, ..., pkₗ) where pkᵢ = H^{w-1}(skᵢ)
+/// pk = (pk₁, ..., pkₗ) where pkᵢ = H^{w-1}(skᵢ)
 #[derive(Debug, Clone,)]
 pub struct WotsPublicKey {
     chains: Vec<Vec<u8,>,>,
@@ -76,7 +75,7 @@ impl WotsPublicKey {
                 return false;
             }
 
-            // Paper: Compute H^{w-1-xᵢ}(σᵢ) and check if it equals pkᵢ
+            // Compute H^{w-1-xᵢ}(σᵢ) and check if it equals pkᵢ
             let iterations = self.params.w - 1 - x_i;
             let computed = hash_chain(&hasher, &signature.chains[i], iterations,);
 
@@ -90,7 +89,7 @@ impl WotsPublicKey {
 }
 
 /// WOTS secret key
-/// Paper Section 3: sk = (sk₁, ..., skₗ) where each skᵢ is random
+/// sk = (sk₁, ..., skₗ) where each skᵢ is random
 #[derive(Debug, Clone,)]
 pub struct WotsSecretKey {
     chains: Vec<Vec<u8,>,>,
@@ -158,7 +157,7 @@ impl WotsKeypair {
     }
 
     /// Sign a message with encoding
-    /// Paper Section 3: Integration with hypercube encoding
+    /// Integration with hypercube encoding
     /// The encoding scheme maps the message to a vertex which provides
     /// the WOTS message digits
     pub fn sign<E: crate::core::encoding::EncodingScheme,>(
@@ -173,7 +172,7 @@ impl WotsKeypair {
         // Encode message to hypercube vertex
         let vertex = encoding.encode(message, &randomness,);
 
-        // Paper: The vertex components (a₁, ..., aᵥ) become WOTS message digits
+        // The vertex components (a₁, ..., aᵥ) become WOTS message digits
         // Convert from hypercube range [1, w] to WOTS range [0, w-1]
         let message_digest: Vec<usize,> =
             vertex.components().iter().map(|&x| x.saturating_sub(1,),).collect();
@@ -182,7 +181,7 @@ impl WotsKeypair {
     }
 
     /// Sign a message digest
-    /// Paper Algorithm WOTS-Sign: σᵢ = H^{xᵢ}(skᵢ) for each digit xᵢ
+    /// σᵢ = H^{xᵢ}(skᵢ) for each digit xᵢ
     pub fn sign_raw(&self, message_digest: &[usize],) -> WotsSignature {
         assert_eq!(
             message_digest.len(),
@@ -202,7 +201,7 @@ impl WotsKeypair {
                 self.params.w
             );
 
-            // Paper Algorithm WOTS-Sign: Compute σᵢ = H^{xᵢ}(skᵢ)
+            // Compute σᵢ = H^{xᵢ}(skᵢ)
             let sig_i = hash_chain(&hasher, &self.secret_key.chains[i], x_i,);
             sig_chains.push(sig_i,);
         }
@@ -212,7 +211,7 @@ impl WotsKeypair {
 }
 
 /// WOTS signature
-/// Paper Section 3: σ = (σ₁, ..., σₗ) where σᵢ = H^{xᵢ}(skᵢ)
+/// σ = (σ₁, ..., σₗ) where σᵢ = H^{xᵢ}(skᵢ)
 #[derive(Debug, Clone,)]
 pub struct WotsSignature {
     chains: Vec<Vec<u8,>,>,
@@ -229,7 +228,7 @@ impl WotsSignature {
 }
 
 /// Compute hash chain H^k(x)
-/// Paper Section 3: Hash chain computation H^k(x) = H(H(...H(x)...))
+/// Hash chain computation H^k(x) = H(H(...H(x)...))
 /// where H is applied k times. H^0(x) = x by definition.
 pub fn hash_chain(hasher: &dyn HashFunction, input: &[u8], iterations: usize,) -> Vec<u8,> {
     if iterations == 0 {
