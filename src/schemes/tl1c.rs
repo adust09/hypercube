@@ -1,17 +1,15 @@
 // TL1C (Top Layers with 1-Chain Checksum) implementation
 //
-// Paper: "At the Top of the Hypercube" Section 2.2
+/// Paper Construction 3:Top Layers with a 1-Chain Checksum
 // TL1C maps messages to multiple layers [0, d₀] with a single checksum chain.
 // This provides better verification efficiency than TSL at the cost of one extra chain.
-
 use crate::core::encoding::{EncodingScheme, NonUniformMapping};
 use crate::core::hypercube::{Hypercube, Vertex};
-use crate::core::layer::calculate_layer_size;
-use crate::core::mapping::integer_to_vertex;
+use crate::core::mapping::{calculate_layer_size, integer_to_vertex};
 use crate::crypto::hash::{HashFunction, SHA256};
+use num_traits::ToPrimitive;
 
 /// TL1C configuration parameters
-/// Paper Section 2.2: Parameters for the TL1C encoding scheme
 #[derive(Debug, Clone,)]
 pub struct TL1CConfig {
     w: usize,
@@ -22,7 +20,7 @@ pub struct TL1CConfig {
 impl TL1CConfig {
     /// Create TL1C config for given security level
     pub fn new(security_bits: usize,) -> Self {
-        // Paper Section 2.2: For TL1C, we need ℓ_{[0:d₀]} ≥ 2^λ
+        // For TL1C, we need ℓ_{[0:d₀]} ≥ 2^λ
         // where ℓ_{[0:d₀]} = Σ_{d=0}^{d₀} ℓ_d
         // Try different parameter combinations
         // Note: w must be large enough to accommodate checksum d0+1
@@ -35,13 +33,27 @@ impl TL1CConfig {
         for (w, v,) in candidates {
             // Find appropriate d0 such that sum of layer sizes ≥ 2^λ
             for d0 in 1..=(v * (w - 1)) {
-                let total_size: usize = (0..=d0).map(|d| calculate_layer_size(d, v, w,),).sum();
+                // Try to calculate total size with overflow protection
+                let mut total_size_option = Some(0usize,);
+                for d in 0..=d0 {
+                    if let Some(current_total,) = total_size_option {
+                        let layer_size_big = calculate_layer_size(d, v, w,).unwrap();
+                        if let Some(layer_size,) = layer_size_big.to_usize() {
+                            total_size_option = current_total.checked_add(layer_size,);
+                        } else {
+                            total_size_option = None;
+                            break;
+                        }
+                    }
+                }
 
-                if total_size > 0 && (total_size as f64).log2() >= security_bits as f64 {
-                    // Paper: Checksum C = d + 1 must satisfy C ∈ [w]
-                    // So we need d₀ + 1 ≤ w
-                    if d0 + 1 <= w {
-                        return TL1CConfig { w, v, d0, };
+                if let Some(total_size,) = total_size_option {
+                    if total_size > 0 && (total_size as f64).log2() >= security_bits as f64 {
+                        // Paper: Checksum C = d + 1 must satisfy C ∈ [w]
+                        // So we need d₀ + 1 ≤ w
+                        if d0 + 1 <= w {
+                            return TL1CConfig { w, v, d0, };
+                        }
                     }
                 }
             }
@@ -79,7 +91,6 @@ impl TL1CConfig {
 }
 
 /// TL1C encoding scheme
-/// Paper Algorithm TL1C (Section 2.2): Maps messages to layers [0, d₀] with checksum
 pub struct TL1C {
     config: TL1CConfig,
     hasher: SHA256,
@@ -88,9 +99,15 @@ pub struct TL1C {
 
 impl TL1C {
     pub fn new(config: TL1CConfig,) -> Self {
-        // Calculate total size of layers [0, d0]
-        let total_layer_size: usize =
-            (0..=config.d0).map(|d| calculate_layer_size(d, config.v, config.w,),).sum();
+        // Calculate total size of layers [0, d0] with overflow protection
+        let mut total_layer_size = 0usize;
+        for d in 0..=config.d0 {
+            let layer_size_big = calculate_layer_size(d, config.v, config.w,).unwrap();
+            let layer_size =
+                layer_size_big.to_usize().expect("Layer size too large to fit in usize",);
+            total_layer_size =
+                total_layer_size.checked_add(layer_size,).expect("Total layer size overflow",);
+        }
 
         assert!(total_layer_size > 0, "Total layer size must be positive");
 
@@ -124,7 +141,8 @@ impl TL1C {
         // Find which layer this index falls into
         let mut cumulative = 0;
         for d in 0..=self.config.d0 {
-            let layer_size = calculate_layer_size(d, self.config.v, self.config.w,);
+            let layer_size =
+                calculate_layer_size(d, self.config.v, self.config.w,).unwrap().to_usize().unwrap();
             if index < cumulative + layer_size {
                 // Index is in layer d
                 let layer_index = index - cumulative;
@@ -185,12 +203,12 @@ impl EncodingScheme for TL1C {
 }
 
 impl NonUniformMapping for TL1C {
-    /// Paper Section 4: Implementation of the non-uniform mapping Ψ for TL1C
+    /// Implementation of the non-uniform mapping Ψ for TL1C
     fn map(&self, value: usize,) -> Vertex {
         self.map_to_top_layers(value,)
     }
 
-    /// Paper Section 4: For TL1C, Pr[Ψ(z) = x] = 1/ℓ_{[0:d₀]} if x ∈ layers [0,d₀], else 0
+    /// For TL1C, Pr[Ψ(z) = x] = 1/ℓ_{[0:d₀]} if x ∈ layers [0,d₀], else 0
     /// This distributes uniformly across all vertices in the top layers.
     fn probability(&self, vertex: &Vertex,) -> f64 {
         let hc = Hypercube::new(self.config.w, self.config.v,);
@@ -218,12 +236,21 @@ mod tests {
         assert!(config.v() > 0);
         assert!(config.d0() > 0);
 
-        // Check that total layer size is at least 2^λ
-        let total_size = (0..=config.d0())
-            .map(|d| calculate_layer_size(d, config.v(), config.w(),),)
-            .sum::<usize>();
+        // Check that total layer size calculation succeeds
+        let mut total_size_option = Some(0usize,);
+        for d in 0..=config.d0() {
+            if let Some(current_total,) = total_size_option {
+                let layer_size_big = calculate_layer_size(d, config.v(), config.w(),).unwrap();
+                if let Some(layer_size,) = layer_size_big.to_usize() {
+                    total_size_option = current_total.checked_add(layer_size,);
+                } else {
+                    total_size_option = None;
+                    break;
+                }
+            }
+        }
 
-        assert!(total_size > 0);
+        assert!(total_size_option.is_some() && total_size_option.unwrap() > 0);
     }
 
     #[test]

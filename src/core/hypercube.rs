@@ -1,11 +1,11 @@
 // Hypercube structure and operations
 //
-// Paper: "At the Top of the Hypercube" Section 1.1
+// Paper: "At the Top of the Hypercube" Section 2.1
 // This module implements the fundamental hypercube structure [w]^v
 // and associated operations as defined in the paper.
 
 /// Represents a hypercube [w]^v
-/// Paper Definition (Section 1.1): The hypercube [w]^v consists of all
+/// Paper Definition (Section 2.1): The hypercube [w]^v consists of all
 /// v-dimensional integer vectors with components from [w] = {1, 2, ..., w}
 #[derive(Debug, Clone,)]
 pub struct Hypercube {
@@ -14,7 +14,7 @@ pub struct Hypercube {
 }
 
 /// Represents a vertex in the hypercube
-/// Paper Definition (Section 1.1): A vertex x = (x₁, x₂, ..., xᵥ) where xᵢ ∈ [w]
+/// Paper Definition (Section 2.1): A vertex x = (x₁, x₂, ..., xᵥ) where xᵢ ∈ [w]
 #[derive(Debug, Clone, PartialEq, Eq,)]
 pub struct Vertex {
     components: Vec<usize,>,
@@ -50,13 +50,13 @@ impl Hypercube {
     }
 
     /// Returns the sink vertex (w, w, ..., w)
-    /// Paper Definition (Section 1.1): The sink vertex (w, w, ..., w) is the unique vertex in layer 0
+    /// Paper Definition (Section 2.1): The sink vertex (w, w, ..., w) is the unique vertex in layer 0
     pub fn sink_vertex(&self,) -> Vertex {
         Vertex::new(vec![self.w; self.v],)
     }
 
     /// Calculates the layer of a vertex: d = vw - Σx_i
-    /// Paper Equation (1) (Section 1.1): The layer of vertex x is d = vw - Σᵢ₌₁ᵛ xᵢ
+    /// (Section 2.1): The layer of vertex x is d = vw - Σᵢ₌₁ᵛ xᵢ
     /// This partitions the hypercube into disjoint layers based on distance from sink
     pub fn calculate_layer(&self, vertex: &Vertex,) -> usize {
         let sum: usize = vertex.components.iter().sum();
@@ -77,7 +77,7 @@ impl Hypercube {
     }
 
     /// Calculates the distance from a vertex to the sink
-    /// Paper Section 1.1: The distance from vertex x to sink is Σᵢ₌₁ᵛ (w - xᵢ)
+    /// Paper Section 2.1: The distance from vertex x to sink is Σᵢ₌₁ᵛ (w - xᵢ)
     /// This equals the layer number d of the vertex
     pub fn distance_from_sink(&self, vertex: &Vertex,) -> usize {
         vertex.components.iter().map(|&x| self.w - x,).sum()
@@ -101,7 +101,7 @@ impl Vertex {
     }
 
     /// Checks if this vertex is less than or equal to another (component-wise)
-    /// Paper Section 1.1: The partial order on vertices is defined as x ≤ y iff xᵢ ≤ yᵢ for all i
+    /// Paper Section 2.1: The partial order on vertices is defined as x ≤ y iff xᵢ ≤ yᵢ for all i
     /// This induces a poset structure on the hypercube
     pub fn le(&self, other: &Self,) -> bool {
         self.components.len() == other.components.len()

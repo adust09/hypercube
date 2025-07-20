@@ -20,7 +20,7 @@ The primary content is in `README.md` which contains comprehensive technical spe
 - **Section 7**: Recommended parameter values for different security levels
 
 ### Mathematical Foundations
-- Hypercube structure `[w]^v` with layer organization (Section 1.1)
+- Hypercube structure `[w]^v` with layer organization (Section 2.1)
 - Encoding functions and collision metrics (Section 1.2) 
 - Vertex mapping algorithms (Section 6.1)
 - Security parameter relationships and bounds (Section 4)
