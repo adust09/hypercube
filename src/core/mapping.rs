@@ -1,5 +1,5 @@
 // Vertex to integer mapping functions - Paper-compliant implementation
-// Based on "At the Top of the Hypercube" Section 6.1
+// Based on "At the Top of the Hypercube" Section 4.3
 //
 // This module implements the bijective mappings between vertices in a layer
 // and integers [0, ℓ_d), as well as the non-uniform mapping function Ψ.
@@ -8,7 +8,7 @@ use num_bigint::BigUint;
 use num_traits::{CheckedSub, One, ToPrimitive, Zero};
 
 /// Maps a vertex in layer d to an integer in [0, ℓ_d)
-/// Paper Section 6.1: Bijective mapping from layer d vertices to {0, 1, ..., ℓ_d - 1}
+/// Paper Section 4.3: Bijective mapping from layer d vertices to {0, 1, ..., ℓ_d - 1}
 /// This is essential for constructing the non-uniform mapping Ψ in the signature schemes.
 pub fn vertex_to_integer(
     vertex: &[usize],
@@ -34,47 +34,55 @@ pub fn vertex_to_integer(
 }
 
 /// Exact vertex-to-integer mapping implementation from the paper
-/// Paper Section 6.1: This implements the combinatorial ranking formula.
-/// For vertex x = (x₁, ..., xᵥ) in layer d, the mapping counts how many
-/// vertices in layer d come before x in lexicographic order.
+/// Paper Section 4.3: MapToInteger algorithm.
+/// For vertex a = (a₁, ..., aᵥ) in layer d, this maps it to an integer
+/// in [0, ℓ_d) according to the paper's algorithm.
 fn vertex_to_integer_paper_exact(
     vertex: &[usize],
     w: usize,
     v: usize,
     d: usize,
 ) -> Result<usize, MappingError,> {
-    let mut rank = BigUint::zero();
-    let mut remaining_dims = v;
-    let mut remaining_sum = d;
-
-    // Process each coordinate position from left to right
-    for (_pos, &coord,) in vertex.iter().enumerate() {
-        remaining_dims -= 1;
-
-        // Count vertices that come before this coordinate at this position
-        for smaller_coord in 1..coord {
-            // Calculate the number of valid completions with this smaller coordinate
-            let used_sum = w - smaller_coord;
-            if remaining_sum >= used_sum {
-                let sub_layer = remaining_sum - used_sum;
-                let completions = calculate_layer_size_exact(sub_layer, remaining_dims, w,)?;
-                rank += completions;
-            }
-        }
-
-        // Update remaining sum constraint
-        let used_sum = w - coord;
-        if remaining_sum < used_sum {
-            return Err(MappingError::InvalidLayer {
-                expected: d,
-                actual: v * w - vertex.iter().sum::<usize>(),
-            },);
-        }
-        remaining_sum -= used_sum;
+    // Verify input vertex is valid
+    if vertex.len() != v {
+        return Err(MappingError::InvalidLayer { expected: d, actual: 0, },);
     }
 
-    // Convert BigUint to usize
-    rank.to_usize().ok_or(MappingError::IntegerOverflow,)
+    // Initialize x_v := 0 and d_v := w - a_v
+    let mut x_v = BigUint::zero();
+    let mut d_v = w - vertex[v - 1];
+
+    // Process from v-1 downto 1
+    for i in (0..v - 1).rev() {
+        // Set j_i := w - a_i
+        let j_i = w - vertex[i];
+
+        // Set d_i := d_{i+1} + j_i
+        let d_i = d_v + j_i;
+
+        // Calculate the range for the sum
+        let remaining_dims = v - i - 1;
+        let j_min = if d_i > (w - 1) * remaining_dims { d_i - (w - 1) * remaining_dims } else { 0 };
+
+        // Set x_i := x_{i+1} + sum
+        let mut sum = BigUint::zero();
+        for j in j_min..j_i {
+            let sub_d = d_i - j;
+            let sub_v = remaining_dims;
+            sum += calculate_layer_size_exact(sub_d, sub_v, w,)?;
+        }
+
+        x_v = x_v + sum;
+        d_v = d_i;
+    }
+
+    // Verify the vertex is in the correct layer
+    if d_v != d {
+        return Err(MappingError::InvalidLayer { expected: d, actual: d_v, },);
+    }
+
+    // Convert to usize and return
+    x_v.to_usize().ok_or(MappingError::IntegerOverflow,)
 }
 
 /// Calculate layer size using the exact formula from the paper
@@ -154,7 +162,7 @@ pub enum MappingError {
 }
 
 /// Maps an integer in [0, ℓ_d) to a vertex in layer d
-/// Paper Section 6.1: Inverse of the vertex-to-integer bijection.
+/// Paper Section 4.3: Inverse of the vertex-to-integer bijection.
 /// This allows uniform sampling from layer d by mapping random integers.
 pub fn integer_to_vertex(
     i: usize,
@@ -173,55 +181,77 @@ pub fn integer_to_vertex(
 }
 
 /// Exact integer-to-vertex mapping implementation from the paper
-/// Paper Section 6.1: Inverse mapping algorithm.
-/// Given an integer i ∈ [0, ℓ_d), this constructs the i-th vertex
-/// in layer d according to lexicographic order.
+/// Paper Section 4.3: MapToVertex algorithm.
+/// Given an integer x ∈ [0, ℓ_d), this constructs the corresponding vertex
+/// in layer d according to the paper's algorithm.
 fn integer_to_vertex_paper_exact(
-    mut index: usize,
+    x: usize,
     w: usize,
     v: usize,
     d: usize,
 ) -> Result<Vec<usize,>, MappingError,> {
-    let mut vertex = vec![1; v];
-    let mut remaining_dims = v;
-    let mut remaining_sum = d;
+    let mut vertex = vec![0; v];
+    let mut x_i = x;
+    let mut d_i = d;
 
-    // Process each coordinate position from left to right
-    for pos in 0..v {
-        remaining_dims -= 1;
+    // Process each coordinate position from 1 to v-1
+    for i in 0..v - 1 {
+        let remaining_dims = v - i;
 
-        // Find the correct coordinate value for this position
-        for coord in 1..=w {
-            let used_sum = w - coord;
-            if remaining_sum >= used_sum {
-                let sub_layer = remaining_sum - used_sum;
-                let completions_big = calculate_layer_size_exact(sub_layer, remaining_dims, w,)?;
-                let completions =
-                    completions_big.to_usize().ok_or(MappingError::IntegerOverflow,)?;
+        // Calculate the valid range for j_i
+        let j_min = if d_i > (w - 1) * (remaining_dims - 1) {
+            d_i - (w - 1) * (remaining_dims - 1)
+        } else {
+            0
+        };
+        let j_max = d_i.min(w - 1,);
 
-                if index < completions {
-                    // This is the correct coordinate
-                    vertex[pos] = coord;
-                    remaining_sum -= used_sum;
-                    break;
-                } else {
-                    // Skip this coordinate's contributions
-                    index -= completions;
-                }
+        // Find j_i such that the sum condition is satisfied
+        let mut sum_before = BigUint::zero();
+        let mut j_i = j_min;
+
+        for j in j_min..=j_max {
+            let sub_d = d_i - j;
+            let sub_v = remaining_dims - 1;
+            let layer_size = calculate_layer_size_exact(sub_d, sub_v, w,)?;
+
+            let sum_including = &sum_before + &layer_size;
+
+            if x_i < sum_including.to_usize().ok_or(MappingError::IntegerOverflow,)? {
+                j_i = j;
+                break;
             }
 
-            // Check if we've reached the maximum coordinate
-            if coord == w {
-                if remaining_sum == used_sum {
-                    vertex[pos] = coord;
-                    remaining_sum = 0;
-                    break;
-                } else {
-                    return Err(MappingError::IndexOutOfRange { index, max: 0, },);
-                }
+            sum_before = sum_including;
+
+            if j == j_max {
+                // x_i is beyond valid range
+                return Err(MappingError::IndexOutOfRange { index: x, max: 0, },);
             }
         }
+
+        // Set a_i := w - j_i
+        vertex[i] = w - j_i;
+
+        // Update d_{i+1} and x_{i+1}
+        d_i = d_i - j_i;
+
+        // Calculate the sum to subtract from x_i
+        let mut sum_to_subtract = BigUint::zero();
+        for j in j_min..j_i {
+            let sub_d = d_i + j_i - j;
+            let sub_v = remaining_dims - 1;
+            sum_to_subtract += calculate_layer_size_exact(sub_d, sub_v, w,)?;
+        }
+
+        x_i = x_i - sum_to_subtract.to_usize().ok_or(MappingError::IntegerOverflow,)?;
     }
+
+    // Set a_v := w - x_v - d_v
+    if x_i + d_i > w {
+        return Err(MappingError::IndexOutOfRange { index: x, max: 0, },);
+    }
+    vertex[v - 1] = w - x_i - d_i;
 
     // Verify the result is in the correct layer
     let actual_layer = v * w - vertex.iter().sum::<usize>();
@@ -442,5 +472,70 @@ mod tests {
 
         // All integers should be unique
         assert_eq!(mapped_integers.len(), layer_size);
+    }
+
+    #[test]
+    fn test_paper_algorithm_bijection() {
+        // Test the paper's algorithm specifically for various parameter sets
+        let test_cases = vec![
+            (2, 3, 1,), // [2]^3, layer 1
+            (3, 2, 2,), // [3]^2, layer 2
+            (3, 3, 3,), // [3]^3, layer 3
+            (4, 3, 4,), // [4]^3, layer 4
+            (4, 4, 6,), // [4]^4, layer 6
+        ];
+
+        for (w, v, d,) in test_cases {
+            let layer_size = layer::calculate_layer_size(d, v, w,);
+
+            // Test forward and backward mapping for all integers in the layer
+            for i in 0..layer_size {
+                let vertex = integer_to_vertex(i, w, v, d,).unwrap();
+
+                // Verify vertex is valid
+                assert_eq!(vertex.len(), v);
+                for &coord in &vertex {
+                    assert!(coord >= 1 && coord <= w, "Invalid coordinate {} for w={}", coord, w);
+                }
+
+                // Verify vertex is in correct layer
+                let layer_sum = v * w - vertex.iter().sum::<usize>();
+                assert_eq!(
+                    layer_sum, d,
+                    "Vertex {:?} is in layer {} but expected layer {}",
+                    vertex, layer_sum, d
+                );
+
+                // Test bijection property
+                let i_back = vertex_to_integer(&vertex, w, v, d,).unwrap();
+                assert_eq!(
+                    i, i_back,
+                    "Bijection failed for i={}, w={}, v={}, d={}: vertex={:?}",
+                    i, w, v, d, vertex
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_edge_cases() {
+        // Test edge cases for the new implementation
+
+        // Single dimension case
+        let vertex = integer_to_vertex(0, 3, 1, 2,).unwrap();
+        assert_eq!(vertex, vec![1]); // w - d = 3 - 2 = 1
+
+        // Maximum layer case
+        let w = 3;
+        let v = 2;
+        let d = 2 * (3 - 1); // Maximum layer
+        let layer_size = layer::calculate_layer_size(d, v, w,);
+        assert_eq!(layer_size, 1); // Only one vertex in max layer
+
+        let vertex = integer_to_vertex(0, w, v, d,).unwrap();
+        assert_eq!(vertex, vec![1, 1]); // All coordinates at minimum
+
+        // Test invalid indices
+        assert!(integer_to_vertex(layer_size, w, v, d,).is_err());
     }
 }

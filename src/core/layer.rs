@@ -11,6 +11,7 @@ use num_traits::{One, Zero};
 /// (Section 2.1): d = vw - Σᵢ₌₁ᵛ xᵢ
 /// This function computes which layer a vertex belongs to based on
 /// the sum of its components.
+/// todo: duplicate with hypercube:61?
 pub fn calculate_layer(vertex: &[usize], w: usize,) -> usize {
     let v = vertex.len();
     let sum: usize = vertex.iter().sum();
@@ -19,7 +20,7 @@ pub fn calculate_layer(vertex: &[usize], w: usize,) -> usize {
 
 /// Calculate the size of layer d in hypercube [w]^v
 /// ℓ_d = Σ_{s=0}^{⌊d/w⌋} (-1)^s · C(v,s) · C(d-s·w+v-1, v-1)
-///
+/// this formula come from P23 in paper
 /// This is the exact formula for the number of vertices in layer d,
 /// derived using the inclusion-exclusion principle. The formula counts
 /// v-dimensional vectors with components in [w] that sum to vw - d.
@@ -77,6 +78,7 @@ pub fn calculate_layer_size(d: usize, v: usize, w: usize,) -> usize {
 /// Calculate binomial coefficient C(n, k)
 /// Paper Section 2: Standard binomial coefficient computation
 /// C(n, k) = n! / (k! · (n-k)!) = number of ways to choose k items from n
+/// TODO:duplicate with mapping:125?
 fn binomial(n: usize, k: usize,) -> BigUint {
     if k > n {
         return BigUint::zero();

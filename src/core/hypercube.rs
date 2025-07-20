@@ -61,7 +61,6 @@ impl Hypercube {
     pub fn calculate_layer(&self, vertex: &Vertex,) -> usize {
         let sum: usize = vertex.components.iter().sum();
         self.v * self.w - sum
-        
     }
 
     /// Returns an iterator over all vertices in a given layer
