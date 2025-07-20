@@ -1,9 +1,8 @@
 // TL1C (Top Layers with 1-Chain Checksum) implementation
 //
-// Paper: "At the Top of the Hypercube" Section 2.2
+/// Paper Construction 3:Top Layers with a 1-Chain Checksum
 // TL1C maps messages to multiple layers [0, d₀] with a single checksum chain.
 // This provides better verification efficiency than TSL at the cost of one extra chain.
-
 use crate::core::encoding::{EncodingScheme, NonUniformMapping};
 use crate::core::hypercube::{Hypercube, Vertex};
 use crate::core::mapping::{calculate_layer_size, integer_to_vertex};
@@ -11,7 +10,6 @@ use crate::crypto::hash::{HashFunction, SHA256};
 use num_traits::ToPrimitive;
 
 /// TL1C configuration parameters
-/// Paper Section 2.2: Parameters for the TL1C encoding scheme
 #[derive(Debug, Clone,)]
 pub struct TL1CConfig {
     w: usize,
@@ -22,7 +20,7 @@ pub struct TL1CConfig {
 impl TL1CConfig {
     /// Create TL1C config for given security level
     pub fn new(security_bits: usize,) -> Self {
-        // Paper Section 2.2: For TL1C, we need ℓ_{[0:d₀]} ≥ 2^λ
+        // For TL1C, we need ℓ_{[0:d₀]} ≥ 2^λ
         // where ℓ_{[0:d₀]} = Σ_{d=0}^{d₀} ℓ_d
         // Try different parameter combinations
         // Note: w must be large enough to accommodate checksum d0+1
@@ -93,7 +91,6 @@ impl TL1CConfig {
 }
 
 /// TL1C encoding scheme
-/// Paper Algorithm TL1C (Section 2.2): Maps messages to layers [0, d₀] with checksum
 pub struct TL1C {
     config: TL1CConfig,
     hasher: SHA256,
@@ -206,12 +203,12 @@ impl EncodingScheme for TL1C {
 }
 
 impl NonUniformMapping for TL1C {
-    /// Paper Section 4: Implementation of the non-uniform mapping Ψ for TL1C
+    /// Implementation of the non-uniform mapping Ψ for TL1C
     fn map(&self, value: usize,) -> Vertex {
         self.map_to_top_layers(value,)
     }
 
-    /// Paper Section 4: For TL1C, Pr[Ψ(z) = x] = 1/ℓ_{[0:d₀]} if x ∈ layers [0,d₀], else 0
+    /// For TL1C, Pr[Ψ(z) = x] = 1/ℓ_{[0:d₀]} if x ∈ layers [0,d₀], else 0
     /// This distributes uniformly across all vertices in the top layers.
     fn probability(&self, vertex: &Vertex,) -> f64 {
         let hc = Hypercube::new(self.config.w, self.config.v,);

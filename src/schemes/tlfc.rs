@@ -1,9 +1,8 @@
 // TLFC (Top Layers with Full Checksum) implementation
 //
-// Paper: "At the Top of the Hypercube" Section 2.3
+/// Paper Construction 2:Top Layers with a Full Checksum
 // TLFC maps messages to multiple layers [0, d₀] with c checksum chains.
 // This provides the best verification efficiency at the cost of c extra chains.
-
 use crate::core::encoding::{EncodingScheme, NonUniformMapping};
 use crate::core::hypercube::{Hypercube, Vertex};
 use crate::core::mapping::{calculate_layer_size, integer_to_vertex};
@@ -11,7 +10,6 @@ use crate::crypto::hash::{HashFunction, SHA256};
 use num_traits::ToPrimitive;
 
 /// TLFC configuration parameters
-/// Paper Section 2.3: Parameters for the TLFC encoding scheme
 #[derive(Debug, Clone,)]
 pub struct TLFCConfig {
     w: usize,
@@ -23,7 +21,7 @@ pub struct TLFCConfig {
 impl TLFCConfig {
     /// Create TLFC config for given security level
     pub fn new(security_bits: usize,) -> Self {
-        // Paper Section 2.3: For TLFC, we need ℓ_{[0:d₀]} ≥ 2^λ
+        // For TLFC, we need ℓ_{[0:d₀]} ≥ 2^λ
         // The number of checksum chains c is an optimization parameter
         // Try different parameter combinations
         let candidates = vec![
@@ -130,7 +128,7 @@ impl TLFC {
     }
 
     /// Calculate full checksum for vertex components
-    /// Paper Equation (3) (Section 2.3): Full checksum with c chains
+    /// Full checksum with c chains
     pub fn calculate_full_checksum(&self, components: &[usize],) -> Vec<usize,> {
         let w = self.config.w;
         let c = self.config.c;
@@ -152,7 +150,7 @@ impl TLFC {
     }
 
     /// Map to top layers [0, d0]
-    /// Paper Section 2.3: Uniform mapping to the union of layers [0, d₀]
+    /// Uniform mapping to the union of layers [0, d₀]
     /// Same distribution as TL1C but with different checksum computation
     pub fn map_to_top_layers(&self, value: usize,) -> Vertex {
         // Map uniformly to layers [0, d0]
@@ -178,7 +176,7 @@ impl TLFC {
     }
 
     /// Convert message to WOTS digest including checksums
-    /// Paper Section 2.3: The WOTS message is (a₁, ..., aᵥ, C₁, ..., C_c)
+    /// The WOTS message is (a₁, ..., aᵥ, C₁, ..., C_c)
     /// where (a₁, ..., aᵥ) is the encoded vertex and C₁, ..., C_c are the checksums.
     pub fn message_to_wots_digest(&self, message: &[u8], randomness: &[u8],) -> Vec<usize,> {
         let (vertex, checksums,) = self.encode_with_checksum(message, randomness,);
@@ -228,7 +226,7 @@ impl NonUniformMapping for TLFC {
         self.map_to_top_layers(value,)
     }
 
-    /// Paper Section 4: For TLFC, Pr[Ψ(z) = x] = 1/ℓ_{[0:d₀]} if x ∈ layers [0,d₀], else 0
+    /// For TLFC, Pr[Ψ(z) = x] = 1/ℓ_{[0:d₀]} if x ∈ layers [0,d₀], else 0
     /// Same distribution as TL1C but achieves better efficiency through the full checksum.
     fn probability(&self, vertex: &Vertex,) -> f64 {
         let hc = Hypercube::new(self.config.w, self.config.v,);

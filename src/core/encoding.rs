@@ -34,7 +34,7 @@ pub trait NonUniformMapping {
 }
 
 /// Calculate the collision metric μ_ℓ²(f)
-/// Paper Definition 4: μ_ℓ²(f) = Σ_{x ∈ [w]^v} Pr[Ψ(z) = x]²
+/// Paper Definition 10: μ_ℓ²(f) = Σ_{x ∈ [w]^v} Pr[Ψ(z) = x]²
 /// This metric measures the collision resistance of the encoding.
 /// Lower values indicate better security properties.
 pub fn calculate_collision_metric(mapping: &dyn NonUniformMapping, v: usize, w: usize,) -> f64 {
