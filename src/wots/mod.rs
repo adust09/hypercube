@@ -1,9 +1,14 @@
 // Winternitz One-Time Signature implementation
+//
+// Paper: "At the Top of the Hypercube" Section 3
+// This module implements the standard WOTS signature scheme that is
+// integrated with the hypercube-based encoding schemes.
 
 use crate::crypto::hash::{HashFunction, SHA256};
 use crate::crypto::random::{OsSecureRandom, SecureRandom};
 
 /// WOTS parameters
+/// Paper Section 3: WOTS parameters derived from hypercube scheme
 #[derive(Debug, Clone,)]
 pub struct WotsParams {
     w: usize,
@@ -31,6 +36,7 @@ impl WotsParams {
 }
 
 /// WOTS public key
+/// Paper Section 3: pk = (pk₁, ..., pkₗ) where pkᵢ = H^{w-1}(skᵢ)
 #[derive(Debug, Clone,)]
 pub struct WotsPublicKey {
     chains: Vec<Vec<u8,>,>,
@@ -51,6 +57,8 @@ impl WotsPublicKey {
     }
 
     /// Verify a signature
+    /// Paper Algorithm WOTS-Verify: Verifies signature by checking
+    /// if H^{w-1-xᵢ}(σᵢ) = pkᵢ for all i
     pub fn verify(&self, message_digest: &[usize], signature: &WotsSignature,) -> bool {
         if message_digest.len() != self.params.chains {
             return false;
@@ -68,7 +76,7 @@ impl WotsPublicKey {
                 return false;
             }
 
-            // Compute H^{w-1-x_i}(σ_i)
+            // Paper: Compute H^{w-1-xᵢ}(σᵢ) and check if it equals pkᵢ
             let iterations = self.params.w - 1 - x_i;
             let computed = hash_chain(&hasher, &signature.chains[i], iterations,);
 
@@ -82,6 +90,7 @@ impl WotsPublicKey {
 }
 
 /// WOTS secret key
+/// Paper Section 3: sk = (sk₁, ..., skₗ) where each skᵢ is random
 #[derive(Debug, Clone,)]
 pub struct WotsSecretKey {
     chains: Vec<Vec<u8,>,>,
@@ -118,7 +127,7 @@ impl WotsKeypair {
             // Generate random secret key
             let sk_i = rng.random_bytes(hasher.output_size(),);
 
-            // Compute public key as H^{w-1}(sk_i)
+            // Paper: Compute public key pkᵢ = H^{w-1}(skᵢ)
             let pk_i = hash_chain(&hasher, &sk_i, params.w - 1,);
 
             sk_chains.push(sk_i,);
@@ -149,6 +158,9 @@ impl WotsKeypair {
     }
 
     /// Sign a message with encoding
+    /// Paper Section 3: Integration with hypercube encoding
+    /// The encoding scheme maps the message to a vertex which provides
+    /// the WOTS message digits
     pub fn sign<E: crate::core::encoding::EncodingScheme,>(
         &self,
         message: &[u8],
@@ -161,8 +173,8 @@ impl WotsKeypair {
         // Encode message to hypercube vertex
         let vertex = encoding.encode(message, &randomness,);
 
-        // Get message digits - the vertex components are the message digest
-        // Convert from [1, w] range to [0, w-1] range for signing
+        // Paper: The vertex components (a₁, ..., aᵥ) become WOTS message digits
+        // Convert from hypercube range [1, w] to WOTS range [0, w-1]
         let message_digest: Vec<usize,> =
             vertex.components().iter().map(|&x| x.saturating_sub(1,),).collect();
 
@@ -170,6 +182,7 @@ impl WotsKeypair {
     }
 
     /// Sign a message digest
+    /// Paper Algorithm WOTS-Sign: σᵢ = H^{xᵢ}(skᵢ) for each digit xᵢ
     pub fn sign_raw(&self, message_digest: &[usize],) -> WotsSignature {
         assert_eq!(
             message_digest.len(),
@@ -189,7 +202,7 @@ impl WotsKeypair {
                 self.params.w
             );
 
-            // Compute σ_i = H^{x_i}(sk_i)
+            // Paper Algorithm WOTS-Sign: Compute σᵢ = H^{xᵢ}(skᵢ)
             let sig_i = hash_chain(&hasher, &self.secret_key.chains[i], x_i,);
             sig_chains.push(sig_i,);
         }
@@ -199,6 +212,7 @@ impl WotsKeypair {
 }
 
 /// WOTS signature
+/// Paper Section 3: σ = (σ₁, ..., σₗ) where σᵢ = H^{xᵢ}(skᵢ)
 #[derive(Debug, Clone,)]
 pub struct WotsSignature {
     chains: Vec<Vec<u8,>,>,
@@ -215,6 +229,8 @@ impl WotsSignature {
 }
 
 /// Compute hash chain H^k(x)
+/// Paper Section 3: Hash chain computation H^k(x) = H(H(...H(x)...))
+/// where H is applied k times. H^0(x) = x by definition.
 pub fn hash_chain(hasher: &dyn HashFunction, input: &[u8], iterations: usize,) -> Vec<u8,> {
     if iterations == 0 {
         return input.to_vec();

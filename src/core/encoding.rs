@@ -1,8 +1,14 @@
 // Encoding schemes and traits
+//
+// Paper: "At the Top of the Hypercube" Section 2 and Section 4
+// This module defines the abstract encoding interface and collision metric
+// that are fundamental to the security of the signature schemes.
 
 use crate::core::hypercube::Vertex;
 
 /// Trait for encoding schemes that map messages to hypercube vertices
+/// Paper Section 2: Abstract definition of encoding function f: M × R → [w]^v
+/// where M is the message space and R is the randomness space.
 pub trait EncodingScheme {
     /// Encode a message with randomness to a vertex
     fn encode(&self, message: &[u8], randomness: &[u8],) -> Vertex;
@@ -15,15 +21,22 @@ pub trait EncodingScheme {
 }
 
 /// Trait for non-uniform mapping functions
+/// Paper Section 4: The non-uniform mapping Ψ is essential for achieving
+/// target collision resistance in the signature schemes.
 pub trait NonUniformMapping {
     /// Map an integer to a vertex according to the distribution
+    /// Paper Definition: Ψ: Z → [w]^v with specified probability distribution
     fn map(&self, value: usize,) -> Vertex;
 
     /// Get the probability of mapping to a specific vertex
+    /// Paper Definition: Pr[Ψ(z) = x] for vertex x ∈ [w]^v
     fn probability(&self, vertex: &Vertex,) -> f64;
 }
 
 /// Calculate the collision metric μ_ℓ²(f)
+/// Paper Definition 4: μ_ℓ²(f) = Σ_{x ∈ [w]^v} Pr[Ψ(z) = x]²
+/// This metric measures the collision resistance of the encoding.
+/// Lower values indicate better security properties.
 pub fn calculate_collision_metric(mapping: &dyn NonUniformMapping, v: usize, w: usize,) -> f64 {
     use crate::core::hypercube::Hypercube;
 

@@ -1,4 +1,8 @@
 // TL1C (Top Layers with 1-Chain Checksum) implementation
+//
+// Paper: "At the Top of the Hypercube" Section 2.2
+// TL1C maps messages to multiple layers [0, d₀] with a single checksum chain.
+// This provides better verification efficiency than TSL at the cost of one extra chain.
 
 use crate::core::encoding::{EncodingScheme, NonUniformMapping};
 use crate::core::hypercube::{Hypercube, Vertex};
@@ -7,6 +11,7 @@ use crate::core::mapping::integer_to_vertex;
 use crate::crypto::hash::{HashFunction, SHA256};
 
 /// TL1C configuration parameters
+/// Paper Section 2.2: Parameters for the TL1C encoding scheme
 #[derive(Debug, Clone)]
 pub struct TL1CConfig {
     w: usize,
@@ -17,7 +22,8 @@ pub struct TL1CConfig {
 impl TL1CConfig {
     /// Create TL1C config for given security level
     pub fn new(security_bits: usize) -> Self {
-        // For TL1C, we need ℓ_{[0:d0]} ≥ 2^λ
+        // Paper Section 2.2: For TL1C, we need ℓ_{[0:d₀]} ≥ 2^λ
+        // where ℓ_{[0:d₀]} = Σ_{d=0}^{d₀} ℓ_d
         // Try different parameter combinations
         // Note: w must be large enough to accommodate checksum d0+1
         let candidates = vec![
@@ -32,7 +38,8 @@ impl TL1CConfig {
                 let total_size: usize = (0..=d0).map(|d| calculate_layer_size(d, v, w)).sum();
 
                 if total_size > 0 && (total_size as f64).log2() >= security_bits as f64 {
-                    // Also check checksum fits in alphabet
+                    // Paper: Checksum C = d + 1 must satisfy C ∈ [w]
+                    // So we need d₀ + 1 ≤ w
                     if d0 + 1 <= w {
                         return TL1CConfig { w, v, d0 };
                     }
@@ -72,6 +79,7 @@ impl TL1CConfig {
 }
 
 /// TL1C encoding scheme
+/// Paper Algorithm TL1C (Section 2.2): Maps messages to layers [0, d₀] with checksum
 pub struct TL1C {
     config: TL1CConfig,
     hasher: SHA256,
@@ -99,12 +107,16 @@ impl TL1C {
     }
 
     /// Calculate checksum for a layer
+    /// Paper Equation (2) (Section 2.2): C = d + 1
+    /// The checksum encodes which layer the message was mapped to.
     pub fn calculate_checksum(&self, layer: usize) -> usize {
-        // Checksum is layer + 1
+        // Paper: Checksum C = d + 1 where d is the layer
         layer + 1
     }
 
     /// Map to top layers [0, d0]
+    /// Paper Section 2.2: Uniform mapping to the union of layers [0, d₀]
+    /// Each vertex in this set has probability 1/ℓ_{[0:d₀]}
     pub fn map_to_top_layers(&self, value: usize) -> Vertex {
         // Map uniformly to layers [0, d0]
         let index = value % self.total_layer_size;
@@ -128,6 +140,8 @@ impl TL1C {
     }
 
     /// Convert message to WOTS digest including checksum
+    /// Paper Section 2.2: The WOTS message is (a₁, ..., aᵥ, C)
+    /// where (a₁, ..., aᵥ) is the encoded vertex and C = d + 1 is the checksum.
     pub fn message_to_wots_digest(&self, message: &[u8], randomness: &[u8]) -> Vec<usize> {
         let (vertex, checksum) = self.encode_with_checksum(message, randomness);
 
@@ -171,16 +185,19 @@ impl EncodingScheme for TL1C {
 }
 
 impl NonUniformMapping for TL1C {
+    /// Paper Section 4: Implementation of the non-uniform mapping Ψ for TL1C
     fn map(&self, value: usize) -> Vertex {
         self.map_to_top_layers(value)
     }
 
+    /// Paper Section 4: For TL1C, Pr[Ψ(z) = x] = 1/ℓ_{[0:d₀]} if x ∈ layers [0,d₀], else 0
+    /// This distributes uniformly across all vertices in the top layers.
     fn probability(&self, vertex: &Vertex) -> f64 {
         let hc = Hypercube::new(self.config.w, self.config.v);
         let layer = hc.calculate_layer(vertex);
 
         if layer <= self.config.d0 {
-            // Uniform within top layers
+            // Paper: Uniform distribution within top layers [0, d₀]
             1.0 / self.total_layer_size as f64
         } else {
             0.0

@@ -1,4 +1,8 @@
 // TSL (Top Single Layer) implementation
+//
+// Paper: "At the Top of the Hypercube" Section 2.1
+// TSL is the simplest scheme that maps messages to a single layer d₀.
+// It achieves optimal collision resistance with no checksum overhead.
 
 use crate::core::encoding::{EncodingScheme, NonUniformMapping};
 use crate::core::hypercube::Vertex;
@@ -7,6 +11,7 @@ use crate::core::mapping::integer_to_vertex;
 use crate::crypto::hash::{HashFunction, SHA256};
 
 /// TSL configuration parameters
+/// Paper Section 2.1: Parameters for the TSL encoding scheme
 #[derive(Debug, Clone)]
 pub struct TSLConfig {
     w: usize,
@@ -17,8 +22,9 @@ pub struct TSLConfig {
 impl TSLConfig {
     /// Create TSL config for given security level
     pub fn new(security_bits: usize) -> Self {
-        // For TSL, we need w^v > 2^{λ + log₄(λ)}
-        // This is approximately 2^{λ + log₂(λ)/2}
+        // Paper Theorem 2: For TSL, we need w^v > 2^{λ + log₄(λ)}
+        // This ensures μ²_ℓ(Ψ) < 2^{-λ} for λ-bit security.
+        // The approximation is 2^{λ + log₂(λ)/2}
 
         let extra_bits = ((security_bits as f64).log2() / 2.0).ceil() as usize;
         let required_bits = security_bits + extra_bits;
@@ -37,7 +43,7 @@ impl TSLConfig {
                 let layer_size = calculate_layer_size(d, v, w);
                 // Check if layer has enough vertices
                 if layer_size > 0 && (layer_size as f64).log2() >= security_bits as f64 {
-                    // Additional check for TSL security requirement
+                    // Paper Theorem 2: Check w^v > 2^{λ + log₄(λ)}
                     let total_bits = (w as f64).powf(v as f64).log2();
                     if total_bits >= required_bits as f64 {
                         return TSLConfig { w, v, d0: d };
@@ -81,6 +87,7 @@ impl TSLConfig {
 }
 
 /// TSL encoding scheme
+/// Paper Algorithm TSL (Section 2.1): Maps messages to layer d₀
 pub struct TSL {
     config: TSLConfig,
     hasher: SHA256,
@@ -96,6 +103,8 @@ impl TSL {
     }
 
     /// Map an integer to a vertex in layer d0
+    /// Paper Section 2.1: Uses the bijection from Section 6.1 to map
+    /// uniformly to vertices in layer d₀.
     pub fn map_to_layer(&self, value: usize) -> Result<Vertex, crate::core::mapping::MappingError> {
         let layer_size = calculate_layer_size(self.config.d0, self.config.v, self.config.w);
         let index = value % layer_size;
@@ -111,7 +120,7 @@ impl TSL {
         message: &[u8],
         randomness: &[u8],
     ) -> Result<Vertex, crate::core::mapping::MappingError> {
-        // H(m || r)
+        // Paper Algorithm TSL Step 1: Compute H(m || r)
         let mut input = Vec::new();
         input.extend_from_slice(message);
         input.extend_from_slice(randomness);
@@ -124,7 +133,7 @@ impl TSL {
             value |= (byte as usize) << (i * 8);
         }
 
-        // Map to layer d0
+        // Paper Algorithm TSL Step 2: Map hash output to layer d₀ using Ψ
         self.map_to_layer(value)
     }
 }
@@ -148,6 +157,7 @@ impl EncodingScheme for TSL {
 }
 
 impl NonUniformMapping for TSL {
+    /// Paper Section 4: Implementation of the non-uniform mapping Ψ for TSL
     fn map(&self, value: usize) -> Vertex {
         self.map_to_layer(value).unwrap_or_else(|_| {
             // Fallback to sink vertex if mapping fails
@@ -155,6 +165,8 @@ impl NonUniformMapping for TSL {
         })
     }
 
+    /// Paper Section 4: For TSL, Pr[Ψ(z) = x] = 1/ℓ_{d₀} if x ∈ layer d₀, else 0
+    /// This achieves optimal collision metric μ²_ℓ(Ψ) = 1/ℓ_{d₀}
     fn probability(&self, vertex: &Vertex) -> f64 {
         let hc = crate::core::hypercube::Hypercube::new(self.config.w, self.config.v);
         if hc.calculate_layer(vertex) == self.config.d0 {

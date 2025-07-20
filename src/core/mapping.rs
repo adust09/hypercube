@@ -1,11 +1,15 @@
 // Vertex to integer mapping functions - Paper-compliant implementation
 // Based on "At the Top of the Hypercube" Section 6.1
+//
+// This module implements the bijective mappings between vertices in a layer
+// and integers [0, ℓ_d), as well as the non-uniform mapping function Ψ.
 
 use num_bigint::BigUint;
 use num_traits::{CheckedSub, One, ToPrimitive, Zero};
 
 /// Maps a vertex in layer d to an integer in [0, ℓ_d)
-/// Implements the exact mapping from the paper Section 6.1
+/// Paper Section 6.1: Bijective mapping from layer d vertices to {0, 1, ..., ℓ_d - 1}
+/// This is essential for constructing the non-uniform mapping Ψ in the signature schemes.
 pub fn vertex_to_integer(
     vertex: &[usize],
     w: usize,
@@ -30,7 +34,9 @@ pub fn vertex_to_integer(
 }
 
 /// Exact vertex-to-integer mapping implementation from the paper
-/// This implements the combinatorial ranking formula from Section 6.1
+/// Paper Section 6.1: This implements the combinatorial ranking formula.
+/// For vertex x = (x₁, ..., xᵥ) in layer d, the mapping counts how many
+/// vertices in layer d come before x in lexicographic order.
 fn vertex_to_integer_paper_exact(
     vertex: &[usize],
     w: usize,
@@ -72,7 +78,9 @@ fn vertex_to_integer_paper_exact(
 }
 
 /// Calculate layer size using the exact formula from the paper
-/// Formula: ℓ_d = Σ_{s=0}^{⌊d/w⌋} (-1)^s · C(v,s) · C(d-s·w+v-1, v-1)
+/// Paper Theorem 6: ℓ_d = Σ_{s=0}^{⌊d/w⌋} (-1)^s · C(v,s) · C(d-s·w+v-1, v-1)
+/// This is the same formula as in layer.rs but returns BigUint for exact arithmetic
+/// in the mapping calculations.
 fn calculate_layer_size_exact(d: usize, v: usize, w: usize,) -> Result<BigUint, MappingError,> {
     if v == 0 {
         return Ok(if d == 0 { BigUint::one() } else { BigUint::zero() },);
@@ -112,6 +120,8 @@ fn calculate_layer_size_exact(d: usize, v: usize, w: usize,) -> Result<BigUint, 
 }
 
 /// Calculate exact binomial coefficient C(n, k) using the paper's requirements
+/// Paper Section 2: Standard binomial coefficient for exact calculations
+/// Uses BigUint to avoid overflow in intermediate calculations.
 fn binomial_coefficient(n: usize, k: usize,) -> BigUint {
     if k > n {
         return BigUint::zero();
@@ -144,7 +154,8 @@ pub enum MappingError {
 }
 
 /// Maps an integer in [0, ℓ_d) to a vertex in layer d
-/// Implements the exact inverse mapping from the paper Section 6.1
+/// Paper Section 6.1: Inverse of the vertex-to-integer bijection.
+/// This allows uniform sampling from layer d by mapping random integers.
 pub fn integer_to_vertex(
     i: usize,
     w: usize,
@@ -162,7 +173,9 @@ pub fn integer_to_vertex(
 }
 
 /// Exact integer-to-vertex mapping implementation from the paper
-/// This implements the inverse of the combinatorial ranking formula
+/// Paper Section 6.1: Inverse mapping algorithm.
+/// Given an integer i ∈ [0, ℓ_d), this constructs the i-th vertex
+/// in layer d according to lexicographic order.
 fn integer_to_vertex_paper_exact(
     mut index: usize,
     w: usize,
@@ -220,7 +233,9 @@ fn integer_to_vertex_paper_exact(
 }
 
 /// Non-uniform mapping function Ψ as defined in the paper
-/// This implements the probability distribution for mapping integers to vertices
+/// Paper Section 4: The non-uniform mapping Ψ is critical for security.
+/// It maps integers uniformly to vertices within a specific layer,
+/// providing target collision resistance for the signature schemes.
 pub struct NonUniformMappingPsi {
     w: usize,
     v: usize,
@@ -238,13 +253,16 @@ impl NonUniformMappingPsi {
     }
 
     /// Map an integer to a vertex according to the non-uniform distribution
+    /// Paper Definition (Section 4): Ψ maps Z → [w]^v with uniform distribution
+    /// within the target layer d.
     pub fn map(&self, value: usize,) -> Result<Vec<usize,>, MappingError,> {
         let index = value % self.layer_size;
         integer_to_vertex(index, self.w, self.v, self.d,)
     }
 
     /// Calculate the probability of mapping to a specific vertex
-    /// In the uniform case within a layer, this is 1/ℓ_d
+    /// Paper Section 4: For TSL scheme, Pr[Ψ(z) = x] = 1/ℓ_d if x is in layer d,
+    /// and 0 otherwise. This achieves optimal collision resistance μ²_ℓ(Ψ) = 1/ℓ_d.
     pub fn probability(&self, vertex: &[usize],) -> Result<f64, MappingError,> {
         // Verify the vertex is in the correct layer
         let layer = self.v * self.w - vertex.iter().sum::<usize>();

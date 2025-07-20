@@ -1,9 +1,16 @@
 // Layer calculations for hypercube
+//
+// Paper: "At the Top of the Hypercube" Section 6 and Theorem 6
+// This module implements layer size calculations using the exact
+// formula from the paper with inclusion-exclusion principle.
 
 use num_bigint::BigUint;
 use num_traits::{One, Zero};
 
 /// Calculate the layer of a vertex: d = vw - Σx_i
+/// Paper Equation (1) (Section 1.1): d = vw - Σᵢ₌₁ᵛ xᵢ
+/// This function computes which layer a vertex belongs to based on
+/// the sum of its components.
 pub fn calculate_layer(vertex: &[usize], w: usize,) -> usize {
     let v = vertex.len();
     let sum: usize = vertex.iter().sum();
@@ -11,7 +18,11 @@ pub fn calculate_layer(vertex: &[usize], w: usize,) -> usize {
 }
 
 /// Calculate the size of layer d in hypercube [w]^v
-/// Formula: ℓ_d = Σ_{s=0}^{⌊d/w⌋} (-1)^s · C(v,s) · C(d-s·w+v-1, v-1)
+/// Paper Theorem 6: ℓ_d = Σ_{s=0}^{⌊d/w⌋} (-1)^s · C(v,s) · C(d-s·w+v-1, v-1)
+/// 
+/// This is the exact formula for the number of vertices in layer d,
+/// derived using the inclusion-exclusion principle. The formula counts
+/// v-dimensional vectors with components in [w] that sum to vw - d.
 pub fn calculate_layer_size(d: usize, v: usize, w: usize,) -> usize {
     // Special cases
     if v == 0 {
@@ -27,7 +38,7 @@ pub fn calculate_layer_size(d: usize, v: usize, w: usize,) -> usize {
     let max_s = d / w;
 
     for s in 0..=max_s {
-        // Calculate C(v, s)
+        // Paper: Calculate C(v, s) - binomial coefficient for inclusion-exclusion
         let binom_v_s = binomial(v, s,);
 
         // Calculate d - s*w + v - 1
@@ -38,10 +49,12 @@ pub fn calculate_layer_size(d: usize, v: usize, w: usize,) -> usize {
             continue;
         }
 
-        // Calculate C(d-s*w+v-1, v-1)
+        // Paper: Calculate C(d-s*w+v-1, v-1) - the number of weak compositions
+        // This counts non-negative integer solutions to x₁ + ... + xᵥ = d - sw
         let binom_inner = binomial(inner as usize, v - 1,);
 
-        // Add or subtract based on (-1)^s
+        // Paper: Apply inclusion-exclusion principle with alternating signs
+        // The (-1)^s factor alternates between adding and subtracting terms
         let term = binom_v_s * binom_inner;
         if s % 2 == 0 {
             sum += term;
@@ -62,6 +75,8 @@ pub fn calculate_layer_size(d: usize, v: usize, w: usize,) -> usize {
 }
 
 /// Calculate binomial coefficient C(n, k)
+/// Paper Section 2: Standard binomial coefficient computation
+/// C(n, k) = n! / (k! · (n-k)!) = number of ways to choose k items from n
 fn binomial(n: usize, k: usize,) -> BigUint {
     if k > n {
         return BigUint::zero();
