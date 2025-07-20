@@ -1,6 +1,6 @@
 // Layer calculations for hypercube
 //
-// Paper: "At the Top of the Hypercube" Section 6 and Theorem 6
+// Paper: "At the Top of the Hypercube"
 // This module implements layer size calculations using the exact
 // formula from the paper with inclusion-exclusion principle.
 
@@ -18,7 +18,7 @@ pub fn calculate_layer(vertex: &[usize], w: usize,) -> usize {
 }
 
 /// Calculate the size of layer d in hypercube [w]^v
-/// Paper Theorem 6: ℓ_d = Σ_{s=0}^{⌊d/w⌋} (-1)^s · C(v,s) · C(d-s·w+v-1, v-1)
+/// ℓ_d = Σ_{s=0}^{⌊d/w⌋} (-1)^s · C(v,s) · C(d-s·w+v-1, v-1)
 ///
 /// This is the exact formula for the number of vertices in layer d,
 /// derived using the inclusion-exclusion principle. The formula counts

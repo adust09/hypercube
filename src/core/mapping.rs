@@ -78,7 +78,7 @@ fn vertex_to_integer_paper_exact(
 }
 
 /// Calculate layer size using the exact formula from the paper
-/// Paper Theorem 6: ℓ_d = Σ_{s=0}^{⌊d/w⌋} (-1)^s · C(v,s) · C(d-s·w+v-1, v-1)
+/// ℓ_d = Σ_{s=0}^{⌊d/w⌋} (-1)^s · C(v,s) · C(d-s·w+v-1, v-1)
 /// This is the same formula as in layer.rs but returns BigUint for exact arithmetic
 /// in the mapping calculations.
 fn calculate_layer_size_exact(d: usize, v: usize, w: usize,) -> Result<BigUint, MappingError,> {
