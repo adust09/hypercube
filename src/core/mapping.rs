@@ -52,7 +52,7 @@ pub fn vertex_to_integer(
         for j in j_min..j_i {
             let sub_d = d_i - j;
             let sub_v = remaining_dims;
-            sum += calculate_layer_size_exact(sub_d, sub_v, w,)?;
+            sum += calculate_layer_size(sub_d, sub_v, w,)?;
         }
 
         x_v = x_v + sum;
@@ -72,7 +72,7 @@ pub fn vertex_to_integer(
 /// ℓ_d = Σ_{s=0}^{⌊d/w⌋} (-1)^s · C(v,s) · C(d-s·w+v-1, v-1)
 /// This is the same formula as in layer.rs but returns BigUint for exact arithmetic
 /// in the mapping calculations.
-fn calculate_layer_size_exact(d: usize, v: usize, w: usize,) -> Result<BigUint, MappingError,> {
+pub fn calculate_layer_size(d: usize, v: usize, w: usize,) -> Result<BigUint, MappingError,> {
     if v == 0 {
         return Ok(if d == 0 { BigUint::one() } else { BigUint::zero() },);
     }
@@ -156,7 +156,7 @@ pub fn integer_to_vertex(
     v: usize,
     d: usize,
 ) -> Result<Vec<usize,>, MappingError,> {
-    let layer_size_big = calculate_layer_size_exact(d, v, w,)?;
+    let layer_size_big = calculate_layer_size(d, v, w,)?;
     let layer_size = layer_size_big.to_usize().ok_or(MappingError::IntegerOverflow,)?;
 
     if x >= layer_size {
@@ -186,7 +186,7 @@ pub fn integer_to_vertex(
         for j in j_min..=j_max {
             let sub_d = d_i - j;
             let sub_v = remaining_dims - 1;
-            let layer_size = calculate_layer_size_exact(sub_d, sub_v, w,)?;
+            let layer_size = calculate_layer_size(sub_d, sub_v, w,)?;
 
             let sum_including = &sum_before + &layer_size;
 
@@ -214,7 +214,7 @@ pub fn integer_to_vertex(
         for j in j_min..j_i {
             let sub_d = d_i + j_i - j;
             let sub_v = remaining_dims - 1;
-            sum_to_subtract += calculate_layer_size_exact(sub_d, sub_v, w,)?;
+            sum_to_subtract += calculate_layer_size(sub_d, sub_v, w,)?;
         }
 
         x_i = x_i - sum_to_subtract.to_usize().ok_or(MappingError::IntegerOverflow,)?;
@@ -249,7 +249,7 @@ pub struct NonUniformMappingPsi {
 impl NonUniformMappingPsi {
     /// Create a new non-uniform mapping function for the given parameters
     pub fn new(w: usize, v: usize, d: usize,) -> Result<Self, MappingError,> {
-        let layer_size_big = calculate_layer_size_exact(d, v, w,)?;
+        let layer_size_big = calculate_layer_size(d, v, w,)?;
         let layer_size = layer_size_big.to_usize().ok_or(MappingError::IntegerOverflow,)?;
 
         Ok(NonUniformMappingPsi { w, v, d, layer_size, },)
@@ -318,7 +318,6 @@ impl MapToInteger {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core::layer;
 
     #[test]
     fn test_vertex_to_integer_basic() {
@@ -380,7 +379,7 @@ mod tests {
             // Only test if layer is valid (d <= v(w-1))
             if d <= v * (w - 1) {
                 // Get layer size (this assumes calculate_layer_size is implemented)
-                let layer_size = layer::calculate_layer_size(d, v, w,);
+                let layer_size = calculate_layer_size(d, v, w,).unwrap().to_usize().unwrap();
 
                 // Test round-trip for several integers
                 for i in 0..layer_size.min(10,) {
@@ -419,7 +418,7 @@ mod tests {
         let integer = mapper.map(&vertex,).unwrap();
 
         // Verify the integer is in valid range
-        let layer_size = layer::calculate_layer_size(2, 3, 4,);
+        let layer_size = calculate_layer_size(2, 3, 4,).unwrap().to_usize().unwrap();
         assert!(integer < layer_size);
     }
 
@@ -433,7 +432,7 @@ mod tests {
         // Test that the mapping is consistent
         // We'll generate all vertices using the integer_to_vertex function
 
-        let layer_size = layer::calculate_layer_size(d, v, w,);
+        let layer_size = calculate_layer_size(d, v, w,).unwrap().to_usize().unwrap();
         let mut mapped_integers = std::collections::HashSet::new();
 
         for i in 0..layer_size {
@@ -459,7 +458,7 @@ mod tests {
         ];
 
         for (w, v, d,) in test_cases {
-            let layer_size = layer::calculate_layer_size(d, v, w,);
+            let layer_size = calculate_layer_size(d, v, w,).unwrap().to_usize().unwrap();
 
             // Test forward and backward mapping for all integers in the layer
             for i in 0..layer_size {
@@ -502,7 +501,7 @@ mod tests {
         let w = 3;
         let v = 2;
         let d = 2 * (3 - 1); // Maximum layer
-        let layer_size = layer::calculate_layer_size(d, v, w,);
+        let layer_size = calculate_layer_size(d, v, w,).unwrap().to_usize().unwrap();
         assert_eq!(layer_size, 1); // Only one vertex in max layer
 
         let vertex = integer_to_vertex(0, w, v, d,).unwrap();

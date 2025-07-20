@@ -6,9 +6,9 @@
 
 use crate::core::encoding::{EncodingScheme, NonUniformMapping};
 use crate::core::hypercube::Vertex;
-use crate::core::layer::calculate_layer_size;
-use crate::core::mapping::integer_to_vertex;
+use crate::core::mapping::{calculate_layer_size, integer_to_vertex};
 use crate::crypto::hash::{HashFunction, SHA256};
+use num_traits::ToPrimitive;
 
 /// TSL configuration parameters
 /// Paper Section 2.1: Parameters for the TSL encoding scheme
@@ -40,13 +40,15 @@ impl TSLConfig {
         for (w, v,) in candidates {
             // Find appropriate d0
             for d in 0..=(v * (w - 1)) {
-                let layer_size = calculate_layer_size(d, v, w,);
-                // Check if layer has enough vertices
-                if layer_size > 0 && (layer_size as f64).log2() >= security_bits as f64 {
-                    // Paper Theorem 2: Check w^v > 2^{λ + log₄(λ)}
-                    let total_bits = (w as f64).powf(v as f64,).log2();
-                    if total_bits >= required_bits as f64 {
-                        return TSLConfig { w, v, d0: d, };
+                let layer_size_big = calculate_layer_size(d, v, w,).unwrap();
+                // Check if layer size can fit in usize and has enough vertices
+                if let Some(layer_size,) = layer_size_big.to_usize() {
+                    if layer_size > 0 && (layer_size as f64).log2() >= security_bits as f64 {
+                        // Paper Theorem 2: Check w^v > 2^{λ + log₄(λ)}
+                        let total_bits = (w as f64).powf(v as f64,).log2();
+                        if total_bits >= required_bits as f64 {
+                            return TSLConfig { w, v, d0: d, };
+                        }
                     }
                 }
             }
@@ -96,7 +98,8 @@ pub struct TSL {
 impl TSL {
     pub fn new(config: TSLConfig,) -> Self {
         // Verify layer d0 has sufficient size
-        let layer_size = calculate_layer_size(config.d0, config.v, config.w,);
+        let layer_size =
+            calculate_layer_size(config.d0, config.v, config.w,).unwrap().to_usize().unwrap();
         assert!(layer_size > 0, "Layer d0 must have positive size");
 
         TSL { config, hasher: SHA256::new(), }
@@ -109,7 +112,10 @@ impl TSL {
         &self,
         value: usize,
     ) -> Result<Vertex, crate::core::mapping::MappingError,> {
-        let layer_size = calculate_layer_size(self.config.d0, self.config.v, self.config.w,);
+        let layer_size = calculate_layer_size(self.config.d0, self.config.v, self.config.w,)
+            .unwrap()
+            .to_usize()
+            .unwrap();
         let index = value % layer_size;
 
         let components = integer_to_vertex(index, self.config.w, self.config.v, self.config.d0,)?;
@@ -173,7 +179,10 @@ impl NonUniformMapping for TSL {
     fn probability(&self, vertex: &Vertex,) -> f64 {
         let hc = crate::core::hypercube::Hypercube::new(self.config.w, self.config.v,);
         if hc.calculate_layer(vertex,) == self.config.d0 {
-            let layer_size = calculate_layer_size(self.config.d0, self.config.v, self.config.w,);
+            let layer_size = calculate_layer_size(self.config.d0, self.config.v, self.config.w,)
+                .unwrap()
+                .to_usize()
+                .unwrap();
             1.0 / layer_size as f64
         } else {
             0.0
@@ -185,7 +194,6 @@ impl NonUniformMapping for TSL {
 mod tests {
     use super::*;
     use crate::core::hypercube::Hypercube;
-    use crate::core::layer;
     use crate::core::mapping;
 
     #[test]
@@ -199,7 +207,8 @@ mod tests {
         assert!(config.d0() > 0);
 
         // Check that layer d0 has vertices
-        let layer_size = layer::calculate_layer_size(config.d0(), config.v(), config.w(),);
+        let layer_size =
+            calculate_layer_size(config.d0(), config.v(), config.w(),).unwrap().to_usize().unwrap();
         assert!(layer_size > 0, "Layer {} should have positive size", config.d0());
     }
 
@@ -290,7 +299,7 @@ mod tests {
         let config = TSLConfig::with_params(3, 3, 3,);
         let tsl = TSL::new(config,);
 
-        let layer_size = layer::calculate_layer_size(3, 3, 3,);
+        let layer_size = calculate_layer_size(3, 3, 3,).unwrap().to_usize().unwrap();
         let mut counts = vec![0; layer_size];
 
         // Map many values and count occurrences

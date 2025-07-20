@@ -6,9 +6,9 @@
 
 use crate::core::encoding::{EncodingScheme, NonUniformMapping};
 use crate::core::hypercube::{Hypercube, Vertex};
-use crate::core::layer::calculate_layer_size;
-use crate::core::mapping::integer_to_vertex;
+use crate::core::mapping::{calculate_layer_size, integer_to_vertex};
 use crate::crypto::hash::{HashFunction, SHA256};
+use num_traits::ToPrimitive;
 
 /// TLFC configuration parameters
 /// Paper Section 2.3: Parameters for the TLFC encoding scheme
@@ -35,10 +35,24 @@ impl TLFCConfig {
         for (w, v, c,) in candidates {
             // Find appropriate d0 such that sum of layer sizes ≥ 2^λ
             for d0 in 1..=(v * (w - 1)) {
-                let total_size: usize = (0..=d0).map(|d| calculate_layer_size(d, v, w,),).sum();
+                // Try to calculate total size with overflow protection
+                let mut total_size_option = Some(0usize,);
+                for d in 0..=d0 {
+                    if let Some(current_total,) = total_size_option {
+                        let layer_size_big = calculate_layer_size(d, v, w,).unwrap();
+                        if let Some(layer_size,) = layer_size_big.to_usize() {
+                            total_size_option = current_total.checked_add(layer_size,);
+                        } else {
+                            total_size_option = None;
+                            break;
+                        }
+                    }
+                }
 
-                if total_size > 0 && (total_size as f64).log2() >= security_bits as f64 {
-                    return TLFCConfig { w, v, d0, c, };
+                if let Some(total_size,) = total_size_option {
+                    if total_size > 0 && (total_size as f64).log2() >= security_bits as f64 {
+                        return TLFCConfig { w, v, d0, c, };
+                    }
                 }
             }
         }
@@ -89,9 +103,15 @@ pub struct TLFC {
 
 impl TLFC {
     pub fn new(config: TLFCConfig,) -> Self {
-        // Calculate total size of layers [0, d0]
-        let total_layer_size: usize =
-            (0..=config.d0).map(|d| calculate_layer_size(d, config.v, config.w,),).sum();
+        // Calculate total size of layers [0, d0] with overflow protection
+        let mut total_layer_size = 0usize;
+        for d in 0..=config.d0 {
+            let layer_size_big = calculate_layer_size(d, config.v, config.w,).unwrap();
+            let layer_size =
+                layer_size_big.to_usize().expect("Layer size too large to fit in usize",);
+            total_layer_size =
+                total_layer_size.checked_add(layer_size,).expect("Total layer size overflow",);
+        }
 
         assert!(total_layer_size > 0, "Total layer size must be positive");
 
@@ -141,7 +161,8 @@ impl TLFC {
         // Find which layer this index falls into
         let mut cumulative = 0;
         for d in 0..=self.config.d0 {
-            let layer_size = calculate_layer_size(d, self.config.v, self.config.w,);
+            let layer_size =
+                calculate_layer_size(d, self.config.v, self.config.w,).unwrap().to_usize().unwrap();
             if index < cumulative + layer_size {
                 // Index is in layer d
                 let layer_index = index - cumulative;
@@ -236,12 +257,21 @@ mod tests {
         assert!(config.d0() > 0);
         assert!(config.c() > 0); // Number of checksum chains
 
-        // Check that total layer size is at least 2^λ
-        let total_size = (0..=config.d0())
-            .map(|d| calculate_layer_size(d, config.v(), config.w(),),)
-            .sum::<usize>();
+        // Check that total layer size calculation succeeds
+        let mut total_size_option = Some(0usize,);
+        for d in 0..=config.d0() {
+            if let Some(current_total,) = total_size_option {
+                let layer_size_big = calculate_layer_size(d, config.v(), config.w(),).unwrap();
+                if let Some(layer_size,) = layer_size_big.to_usize() {
+                    total_size_option = current_total.checked_add(layer_size,);
+                } else {
+                    total_size_option = None;
+                    break;
+                }
+            }
+        }
 
-        assert!(total_size > 0);
+        assert!(total_size_option.is_some() && total_size_option.unwrap() > 0);
     }
 
     #[test]

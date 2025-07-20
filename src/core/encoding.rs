@@ -104,8 +104,9 @@ impl Iterator for AllVertices {
 mod tests {
     use super::*;
     use crate::core::hypercube::Hypercube;
-    use crate::core::layer;
     use crate::core::mapping;
+    use crate::core::mapping::calculate_layer_size;
+    use num_traits::ToPrimitive;
 
     #[test]
     fn test_encoding_trait() {
@@ -147,11 +148,14 @@ mod tests {
         impl NonUniformMapping for SingleLayerMapping {
             fn map(&self, value: usize,) -> Vertex {
                 // Map to vertices in target layer
-                let layer_size = layer::calculate_layer_size(
+                let layer_size = calculate_layer_size(
                     self.target_layer,
                     self.hypercube.dimension(),
                     self.hypercube.alphabet_size(),
-                );
+                )
+                .unwrap()
+                .to_usize()
+                .unwrap();
 
                 let index = value % layer_size;
                 let components = mapping::integer_to_vertex(
@@ -169,11 +173,14 @@ mod tests {
             fn probability(&self, vertex: &Vertex,) -> f64 {
                 // Uniform within target layer, 0 outside
                 if self.hypercube.calculate_layer(vertex,) == self.target_layer {
-                    let layer_size = layer::calculate_layer_size(
+                    let layer_size = calculate_layer_size(
                         self.target_layer,
                         self.hypercube.dimension(),
                         self.hypercube.alphabet_size(),
-                    );
+                    )
+                    .unwrap()
+                    .to_usize()
+                    .unwrap();
                     1.0 / layer_size as f64
                 } else {
                     0.0
