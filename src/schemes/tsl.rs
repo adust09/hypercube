@@ -348,4 +348,24 @@ mod tests {
 
         assert_eq!(config.signature_chains(), 32); // Only v chains, no checksum
     }
+
+    #[test]
+    fn test_tsl_encoding_paper_params_1() { // minimum params on the paper
+        let w = 86;
+        let v = 25;
+        let d0 = 384;
+
+        let config = TSLConfig::with_params(w, v, d0); // Small example for testing
+        let tsl = TSL::new(config,);
+
+        // Test encoding
+        let message = b"test message";
+        let randomness = b"random seed";
+
+        let encoded = tsl.encode(message, randomness,).unwrap();
+
+        // Verify the encoded vertex is in the correct layer
+        let layer = Hypercube::new(w, v,).calculate_layer(&encoded,);
+        assert_eq!(layer, 384); // Should be in layer d0 = 384
+    }
 }
