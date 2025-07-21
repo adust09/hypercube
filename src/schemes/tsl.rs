@@ -380,4 +380,44 @@ mod tests {
         let layer = Hypercube::new(w, v,).calculate_layer(&encoded,);
         assert_eq!(layer, 384); // Should be in layer d0 = 384
     }
+
+    #[test]
+    fn test_tsl_encoding_paper_params_2() { // minimum params on the paper
+        let w = 44;
+        let v = 30;
+        let d0 = 235;
+
+        let config = TSLConfig::with_params(w, v, d0); // Small example for testing
+        let tsl = TSL::new(config,);
+
+        // Test encoding
+        let message = b"test message";
+        let randomness = b"random seed";
+
+        let encoded = tsl.encode(message, randomness,).unwrap();
+
+        // Verify the encoded vertex is in the correct layer
+        let layer = Hypercube::new(w, v,).calculate_layer(&encoded,);
+        assert_eq!(layer, 235); // Should be in layer d0 = 235
+    }
+
+    #[test]
+    fn test_tsl_encoding_paper_params_3() { // minimum params on the paper
+        let w = 26;
+        let v = 35;
+        let d0 = 168;
+
+        let config = TSLConfig::with_params(w, v, d0); // Small example for testing
+        let tsl = TSL::new(config,);
+
+        // Test encoding
+        let message = b"test message";
+        let randomness = b"random seed";
+
+        let encoded = tsl.encode(message, randomness,).unwrap();
+
+        // Verify the encoded vertex is in the correct layer
+        let layer = Hypercube::new(w, v,).calculate_layer(&encoded,);
+        assert_eq!(layer, 168); // Should be in layer d0 = 168
+    }
 }
