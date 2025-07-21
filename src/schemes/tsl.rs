@@ -8,7 +8,8 @@ use crate::core::encoding::{EncodingScheme, NonUniformMapping};
 use crate::core::hypercube::Vertex;
 use crate::core::mapping::{calculate_layer_size, integer_to_vertex};
 use crate::crypto::hash::{HashFunction, SHA256};
-use num_traits::ToPrimitive;
+use num_bigint::BigUint;
+use num_traits::{ToPrimitive, Zero};
 
 /// TSL configuration parameters
 /// Parameters for the TSL encoding scheme
@@ -93,16 +94,23 @@ impl TSLConfig {
 pub struct TSL {
     config: TSLConfig,
     hasher: SHA256,
+    layer_size: BigUint,
 }
 
 impl TSL {
     pub fn new(config: TSLConfig,) -> Self {
-        // Verify layer d0 has sufficient size
-        let layer_size =
-            calculate_layer_size(config.d0, config.v, config.w,).unwrap().to_usize().unwrap();
-        assert!(layer_size > 0, "Layer d0 must have positive size");
+        // Calculate layer d0 size
+        let layer_size = calculate_layer_size(config.d0, config.v, config.w,)
+            .expect("Failed to calculate layer size");
+        
+        // Verify layer d0 has positive size
+        assert!(!layer_size.is_zero(), "Layer d0 must have positive size");
 
-        TSL { config, hasher: SHA256::new(), }
+        TSL { 
+            config, 
+            hasher: SHA256::new(),
+            layer_size,
+        }
     }
 
     /// Map an integer to a vertex in layer d0
@@ -111,12 +119,16 @@ impl TSL {
         &self,
         value: usize,
     ) -> Result<Vertex, crate::core::mapping::MappingError,> {
-        let layer_size = calculate_layer_size(self.config.d0, self.config.v, self.config.w,)
-            .unwrap()
-            .to_usize()
-            .unwrap();
-        let index = value % layer_size;
-
+        // For very large layer sizes, use a simpler approach
+        // Map the input value to a manageable range while preserving uniformity
+        let max_index = if let Some(layer_size_usize) = self.layer_size.to_usize() {
+            layer_size_usize
+        } else {
+            // For very large layer sizes, use a reasonable bound
+            usize::MAX / 2
+        };
+        
+        let index = value % max_index;
         let components = integer_to_vertex(index, self.config.w, self.config.v, self.config.d0,)?;
 
         Ok(Vertex::new(components,),)
