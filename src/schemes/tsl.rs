@@ -458,4 +458,24 @@ mod tests {
         let layer = Hypercube::new(w, v,).calculate_layer(&encoded,);
         assert_eq!(layer, 168); // Should be in layer d0 = 168
     }
+
+    #[test]
+    fn test_tsl_encoding_paper_params_4() { // minimum params on the paper
+        let w = 56;
+        let v = 35;
+        let d0 = 337;
+
+        let config = TSLConfig::with_params(w, v, d0); // Small example for testing
+        let tsl = TSL::new(config,);
+
+        // Test encoding
+        let message = b"test message";
+        let randomness = b"random seed";
+
+        let encoded = tsl.encode(message, randomness,).unwrap();
+
+        // Verify the encoded vertex is in the correct layer
+        let layer = Hypercube::new(w, v,).calculate_layer(&encoded,);
+        assert_eq!(layer, 337); // Should be in layer d0 = 337
+    }
 }
