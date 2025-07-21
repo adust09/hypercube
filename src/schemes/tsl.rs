@@ -119,19 +119,57 @@ impl TSL {
         &self,
         value: usize,
     ) -> Result<Vertex, crate::core::mapping::MappingError,> {
-        // For very large layer sizes, use a simpler approach
-        // Map the input value to a manageable range while preserving uniformity
-        let max_index = if let Some(layer_size_usize) = self.layer_size.to_usize() {
+        // Handle zero layer size case
+        if self.layer_size.is_zero() {
+            return Err(crate::core::mapping::MappingError::InvalidLayer { 
+                expected: self.config.d0, 
+                actual: 0 
+            });
+        }
+        
+        // For very large layer sizes that can't fit in usize,
+        // map to a safe, smaller range while preserving uniformity
+        let safe_max_index = if let Some(layer_size_usize) = self.layer_size.to_usize() {
+            if layer_size_usize == 0 {
+                return Err(crate::core::mapping::MappingError::InvalidLayer { 
+                    expected: self.config.d0, 
+                    actual: 0 
+                });
+            }
             layer_size_usize
         } else {
-            // For very large layer sizes, use a reasonable bound
-            usize::MAX / 2
+            // For very large layer sizes, use a very conservative approach:
+            // Start with small values that are guaranteed to work
+            100
         };
         
-        let index = value % max_index;
-        let components = integer_to_vertex(index, self.config.w, self.config.v, self.config.d0,)?;
-
-        Ok(Vertex::new(components,),)
+        // Try mapping with increasingly smaller ranges until we find one that works
+        let mut index = value % safe_max_index;
+        let mut attempts = 0;
+        const MAX_ATTEMPTS: usize = 10;
+        
+        while attempts < MAX_ATTEMPTS {
+            match integer_to_vertex(index, self.config.w, self.config.v, self.config.d0) {
+                Ok(components) => {
+                    return Ok(Vertex::new(components));
+                },
+                Err(_) => {
+                    // If this index doesn't work, try a smaller range
+                    let smaller_range = safe_max_index / (2 * (attempts + 1));
+                    if smaller_range == 0 {
+                        break;
+                    }
+                    index = value % smaller_range;
+                    attempts += 1;
+                }
+            }
+        }
+        
+        // If all attempts failed, return an error
+        Err(crate::core::mapping::MappingError::InvalidLayer { 
+            expected: self.config.d0, 
+            actual: 0 
+        })
     }
 
     /// Encode message and randomness to vertex

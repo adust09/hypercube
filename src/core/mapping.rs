@@ -209,8 +209,9 @@ pub fn integer_to_vertex(
             sum_before = sum_including;
 
             if j == j_max {
-                // x_i is beyond valid range
-                return Err(MappingError::IndexOutOfRange { index: x, max: 0, },);
+                // x_i is beyond valid range, use actual layer size if available
+                let max_size = layer_size_big.to_usize().unwrap_or(usize::MAX);
+                return Err(MappingError::IndexOutOfRange { index: x, max: max_size, },);
             }
         }
 
@@ -238,7 +239,8 @@ pub fn integer_to_vertex(
 
     // Set a_v := w - x_v - d_v
     if x_i + d_i > w {
-        return Err(MappingError::IndexOutOfRange { index: x, max: 0, },);
+        let max_size = layer_size_big.to_usize().unwrap_or(usize::MAX);
+        return Err(MappingError::IndexOutOfRange { index: x, max: max_size, },);
     }
     vertex[v - 1] = w - x_i - d_i;
 
