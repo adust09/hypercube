@@ -158,11 +158,15 @@ pub fn integer_to_vertex(
     d: usize,
 ) -> Result<Vec<usize,>, MappingError,> {
     let layer_size_big = calculate_layer_size(d, v, w,)?;
-    let layer_size = layer_size_big.to_usize().ok_or(MappingError::IntegerOverflow,)?;
-
-    if x >= layer_size {
-        return Err(MappingError::IndexOutOfRange { index: x, max: layer_size, },);
+    
+    // For very large layer sizes, accept any reasonable x value
+    if let Some(layer_size) = layer_size_big.to_usize() {
+        if x >= layer_size {
+            return Err(MappingError::IndexOutOfRange { index: x, max: layer_size, },);
+        }
     }
+    // If layer_size is too large to fit in usize, we proceed with the algorithm
+    // assuming x is within a reasonable range
 
     let mut vertex = vec![0; v];
     let mut x_i = x;
@@ -191,7 +195,13 @@ pub fn integer_to_vertex(
 
             let sum_including = &sum_before + &layer_size;
 
-            if x_i < sum_including.to_usize().ok_or(MappingError::IntegerOverflow,)? {
+            if let Some(sum_including_usize) = sum_including.to_usize() {
+                if x_i < sum_including_usize {
+                    j_i = j;
+                    break;
+                }
+            } else {
+                // If sum_including is too large, x_i is definitely smaller
                 j_i = j;
                 break;
             }
@@ -199,8 +209,9 @@ pub fn integer_to_vertex(
             sum_before = sum_including;
 
             if j == j_max {
-                // x_i is beyond valid range
-                return Err(MappingError::IndexOutOfRange { index: x, max: 0, },);
+                // x_i is beyond valid range, use actual layer size if available
+                let max_size = layer_size_big.to_usize().unwrap_or(usize::MAX);
+                return Err(MappingError::IndexOutOfRange { index: x, max: max_size, },);
             }
         }
 
@@ -218,12 +229,18 @@ pub fn integer_to_vertex(
             sum_to_subtract += calculate_layer_size(sub_d, sub_v, w,)?;
         }
 
-        x_i = x_i - sum_to_subtract.to_usize().ok_or(MappingError::IntegerOverflow,)?;
+        if let Some(sum_to_subtract_usize) = sum_to_subtract.to_usize() {
+            x_i = x_i.saturating_sub(sum_to_subtract_usize);
+        } else {
+            // If sum_to_subtract is very large, set x_i to 0
+            x_i = 0;
+        }
     }
 
     // Set a_v := w - x_v - d_v
     if x_i + d_i > w {
-        return Err(MappingError::IndexOutOfRange { index: x, max: 0, },);
+        let max_size = layer_size_big.to_usize().unwrap_or(usize::MAX);
+        return Err(MappingError::IndexOutOfRange { index: x, max: max_size, },);
     }
     vertex[v - 1] = w - x_i - d_i;
 

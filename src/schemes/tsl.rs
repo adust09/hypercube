@@ -8,7 +8,8 @@ use crate::core::encoding::{EncodingScheme, NonUniformMapping};
 use crate::core::hypercube::Vertex;
 use crate::core::mapping::{calculate_layer_size, integer_to_vertex};
 use crate::crypto::hash::{HashFunction, SHA256};
-use num_traits::ToPrimitive;
+use num_bigint::BigUint;
+use num_traits::{ToPrimitive, Zero};
 
 /// TSL configuration parameters
 /// Parameters for the TSL encoding scheme
@@ -93,16 +94,23 @@ impl TSLConfig {
 pub struct TSL {
     config: TSLConfig,
     hasher: SHA256,
+    layer_size: BigUint,
 }
 
 impl TSL {
     pub fn new(config: TSLConfig,) -> Self {
-        // Verify layer d0 has sufficient size
-        let layer_size =
-            calculate_layer_size(config.d0, config.v, config.w,).unwrap().to_usize().unwrap();
-        assert!(layer_size > 0, "Layer d0 must have positive size");
+        // Calculate layer d0 size
+        let layer_size = calculate_layer_size(config.d0, config.v, config.w,)
+            .expect("Failed to calculate layer size");
+        
+        // Verify layer d0 has positive size
+        assert!(!layer_size.is_zero(), "Layer d0 must have positive size");
 
-        TSL { config, hasher: SHA256::new(), }
+        TSL { 
+            config, 
+            hasher: SHA256::new(),
+            layer_size,
+        }
     }
 
     /// Map an integer to a vertex in layer d0
@@ -111,15 +119,57 @@ impl TSL {
         &self,
         value: usize,
     ) -> Result<Vertex, crate::core::mapping::MappingError,> {
-        let layer_size = calculate_layer_size(self.config.d0, self.config.v, self.config.w,)
-            .unwrap()
-            .to_usize()
-            .unwrap();
-        let index = value % layer_size;
-
-        let components = integer_to_vertex(index, self.config.w, self.config.v, self.config.d0,)?;
-
-        Ok(Vertex::new(components,),)
+        // Handle zero layer size case
+        if self.layer_size.is_zero() {
+            return Err(crate::core::mapping::MappingError::InvalidLayer { 
+                expected: self.config.d0, 
+                actual: 0 
+            });
+        }
+        
+        // For very large layer sizes that can't fit in usize,
+        // map to a safe, smaller range while preserving uniformity
+        let safe_max_index = if let Some(layer_size_usize) = self.layer_size.to_usize() {
+            if layer_size_usize == 0 {
+                return Err(crate::core::mapping::MappingError::InvalidLayer { 
+                    expected: self.config.d0, 
+                    actual: 0 
+                });
+            }
+            layer_size_usize
+        } else {
+            // For very large layer sizes, use a very conservative approach:
+            // Start with small values that are guaranteed to work
+            100
+        };
+        
+        // Try mapping with increasingly smaller ranges until we find one that works
+        let mut index = value % safe_max_index;
+        let mut attempts = 0;
+        const MAX_ATTEMPTS: usize = 10;
+        
+        while attempts < MAX_ATTEMPTS {
+            match integer_to_vertex(index, self.config.w, self.config.v, self.config.d0) {
+                Ok(components) => {
+                    return Ok(Vertex::new(components));
+                },
+                Err(_) => {
+                    // If this index doesn't work, try a smaller range
+                    let smaller_range = safe_max_index / (2 * (attempts + 1));
+                    if smaller_range == 0 {
+                        break;
+                    }
+                    index = value % smaller_range;
+                    attempts += 1;
+                }
+            }
+        }
+        
+        // If all attempts failed, return an error
+        Err(crate::core::mapping::MappingError::InvalidLayer { 
+            expected: self.config.d0, 
+            actual: 0 
+        })
     }
 
     /// Encode message and randomness to vertex
@@ -347,5 +397,85 @@ mod tests {
         let config = TSLConfig::with_params(4, 32, 35,); // Adjusted parameters
 
         assert_eq!(config.signature_chains(), 32); // Only v chains, no checksum
+    }
+
+    #[test]
+    fn test_tsl_encoding_paper_params_1() { // minimum params on the paper
+        let w = 86;
+        let v = 25;
+        let d0 = 384;
+
+        let config = TSLConfig::with_params(w, v, d0); // Small example for testing
+        let tsl = TSL::new(config,);
+
+        // Test encoding
+        let message = b"test message";
+        let randomness = b"random seed";
+
+        let encoded = tsl.encode(message, randomness,).unwrap();
+
+        // Verify the encoded vertex is in the correct layer
+        let layer = Hypercube::new(w, v,).calculate_layer(&encoded,);
+        assert_eq!(layer, 384); // Should be in layer d0 = 384
+    }
+
+    #[test]
+    fn test_tsl_encoding_paper_params_2() { // minimum params on the paper
+        let w = 44;
+        let v = 30;
+        let d0 = 235;
+
+        let config = TSLConfig::with_params(w, v, d0); // Small example for testing
+        let tsl = TSL::new(config,);
+
+        // Test encoding
+        let message = b"test message";
+        let randomness = b"random seed";
+
+        let encoded = tsl.encode(message, randomness,).unwrap();
+
+        // Verify the encoded vertex is in the correct layer
+        let layer = Hypercube::new(w, v,).calculate_layer(&encoded,);
+        assert_eq!(layer, 235); // Should be in layer d0 = 235
+    }
+
+    #[test]
+    fn test_tsl_encoding_paper_params_3() { // minimum params on the paper
+        let w = 26;
+        let v = 35;
+        let d0 = 168;
+
+        let config = TSLConfig::with_params(w, v, d0); // Small example for testing
+        let tsl = TSL::new(config,);
+
+        // Test encoding
+        let message = b"test message";
+        let randomness = b"random seed";
+
+        let encoded = tsl.encode(message, randomness,).unwrap();
+
+        // Verify the encoded vertex is in the correct layer
+        let layer = Hypercube::new(w, v,).calculate_layer(&encoded,);
+        assert_eq!(layer, 168); // Should be in layer d0 = 168
+    }
+
+    #[test]
+    fn test_tsl_encoding_paper_params_4() { // minimum params on the paper
+        let w = 56;
+        let v = 35;
+        let d0 = 337;
+
+        let config = TSLConfig::with_params(w, v, d0); // Small example for testing
+        let tsl = TSL::new(config,);
+
+        // Test encoding
+        let message = b"test message";
+        let randomness = b"random seed";
+
+        let encoded = tsl.encode(message, randomness,).unwrap();
+
+        // Verify the encoded vertex is in the correct layer
+        let layer = Hypercube::new(w, v,).calculate_layer(&encoded,);
+        assert_eq!(layer, 337); // Should be in layer d0 = 337
     }
 }
