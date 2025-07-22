@@ -400,82 +400,53 @@ mod tests {
     }
 
     #[test]
-    fn test_tsl_encoding_paper_params_1() { // minimum params on the paper
-        let w = 86;
-        let v = 25;
-        let d0 = 384;
+    fn test_tsl_encoding_paper_params() {
+        let test_cases = [
+            // security level: 128
+            (86, 25, 384),
+            (44, 30, 235),
+            (26, 35, 168),
+            (20, 40, 131),
+            (18, 45, 108),
+            (14, 50, 93),
+            (10, 55, 83),
+            (8, 64, 70),
+            (9, 67, 66),
+            (9, 68, 65),
+            (6, 81, 56),
+            (6, 84, 54),
+            (6, 86, 53),
+            (4, 128, 40),
+            (5, 132, 39),
+            (4, 136, 39),
+            // security level: 160
+            (56, 35, 337),
+            (44, 40, 245),
+            (28, 45, 193),
+            (21, 50, 160),
+            (14, 60, 121),
+            (13, 70, 99),
+            (8, 80, 86),
+            (7, 84, 82),
+            (6, 101, 69),
+            (7, 104, 67),
+            (6, 106, 66),
+            (4, 160, 50),
+            (4, 165, 49),
+            (4, 168, 48),
+        ];
 
-        let config = TSLConfig::with_params(w, v, d0); // Small example for testing
-        let tsl = TSL::new(config,);
+        for (w, v, d0) in test_cases {
+            let config = TSLConfig::with_params(w, v, d0);
+            let tsl = TSL::new(config);
 
-        // Test encoding
-        let message = b"test message";
-        let randomness = b"random seed";
+            let message = b"test message";
+            let randomness = b"random seed";
 
-        let encoded = tsl.encode(message, randomness,).unwrap();
+            let encoded = tsl.encode(message, randomness).unwrap();
 
-        // Verify the encoded vertex is in the correct layer
-        let layer = Hypercube::new(w, v,).calculate_layer(&encoded,);
-        assert_eq!(layer, 384); // Should be in layer d0 = 384
-    }
-
-    #[test]
-    fn test_tsl_encoding_paper_params_2() { // minimum params on the paper
-        let w = 44;
-        let v = 30;
-        let d0 = 235;
-
-        let config = TSLConfig::with_params(w, v, d0); // Small example for testing
-        let tsl = TSL::new(config,);
-
-        // Test encoding
-        let message = b"test message";
-        let randomness = b"random seed";
-
-        let encoded = tsl.encode(message, randomness,).unwrap();
-
-        // Verify the encoded vertex is in the correct layer
-        let layer = Hypercube::new(w, v,).calculate_layer(&encoded,);
-        assert_eq!(layer, 235); // Should be in layer d0 = 235
-    }
-
-    #[test]
-    fn test_tsl_encoding_paper_params_3() { // minimum params on the paper
-        let w = 26;
-        let v = 35;
-        let d0 = 168;
-
-        let config = TSLConfig::with_params(w, v, d0); // Small example for testing
-        let tsl = TSL::new(config,);
-
-        // Test encoding
-        let message = b"test message";
-        let randomness = b"random seed";
-
-        let encoded = tsl.encode(message, randomness,).unwrap();
-
-        // Verify the encoded vertex is in the correct layer
-        let layer = Hypercube::new(w, v,).calculate_layer(&encoded,);
-        assert_eq!(layer, 168); // Should be in layer d0 = 168
-    }
-
-    #[test]
-    fn test_tsl_encoding_paper_params_4() { // minimum params on the paper
-        let w = 56;
-        let v = 35;
-        let d0 = 337;
-
-        let config = TSLConfig::with_params(w, v, d0); // Small example for testing
-        let tsl = TSL::new(config,);
-
-        // Test encoding
-        let message = b"test message";
-        let randomness = b"random seed";
-
-        let encoded = tsl.encode(message, randomness,).unwrap();
-
-        // Verify the encoded vertex is in the correct layer
-        let layer = Hypercube::new(w, v,).calculate_layer(&encoded,);
-        assert_eq!(layer, 337); // Should be in layer d0 = 337
+            let layer = Hypercube::new(w, v).calculate_layer(&encoded);
+            assert_eq!(layer, d0);
+        }
     }
 }
