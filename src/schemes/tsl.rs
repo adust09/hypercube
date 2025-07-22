@@ -27,7 +27,10 @@ impl TSLConfig {
         match security_bits {
             128 => Self::new_full(128, 25),
             160 => Self::new_full(160, 35),
-            _ => panic!("Only 128-bit and 160-bit security levels are supported. Got: {}", security_bits),
+            _ => panic!(
+                "Only 128-bit and 160-bit security levels are supported. Got: {}",
+                security_bits
+            ),
         }
     }
 
@@ -36,14 +39,27 @@ impl TSLConfig {
     pub fn new_full(security_bits: usize, v: usize) -> Self {
         // Paper parameters for TSL (w, v, optimal_d0)
         let paper_params_128 = [
-            (86, 25, 384), (44, 30, 235), (26, 35, 168), (20, 40, 131),
-            (18, 45, 108), (14, 50, 93), (10, 55, 83), (8, 64, 70),
-            (6, 84, 54), (4, 132, 39),
+            (86, 25, 384),
+            (44, 30, 235),
+            (26, 35, 168),
+            (20, 40, 131),
+            (18, 45, 108),
+            (14, 50, 93),
+            (10, 55, 83),
+            (8, 64, 70),
+            (6, 84, 54),
+            (4, 132, 39),
         ];
-        
+
         let paper_params_160 = [
-            (56, 35, 337), (44, 40, 245), (28, 45, 193), (21, 50, 160),
-            (14, 60, 121), (13, 70, 99), (8, 80, 86), (6, 104, 67),
+            (56, 35, 337),
+            (44, 40, 245),
+            (28, 45, 193),
+            (21, 50, 160),
+            (14, 60, 121),
+            (13, 70, 99),
+            (8, 80, 86),
+            (6, 104, 67),
             (4, 168, 48),
         ];
 
@@ -57,18 +73,23 @@ impl TSLConfig {
         // Find best match for requested v
         let mut best_match = None;
         let mut min_v_diff = usize::MAX;
-        
+
         for &(w, param_v, d0) in params {
-            let v_diff = if param_v >= v { param_v - v } else { v - param_v };
-            
+            let v_diff = if param_v >= v {
+                param_v - v
+            } else {
+                v - param_v
+            };
+
             // Prefer exact match or close v, and ensure layer has vertices
             if v_diff < min_v_diff {
                 if let Ok(layer_size) = calculate_layer_size(d0, v, w) {
                     if !layer_size.is_zero() {
                         // Verify this parameter set meets security requirements
                         let total_bits = (w as f64).powf(v as f64).log2();
-                        let required_bits = security_bits as f64 + ((security_bits as f64).log2() / 2.0);
-                        
+                        let required_bits =
+                            security_bits as f64 + ((security_bits as f64).log2() / 2.0);
+
                         if total_bits >= required_bits {
                             best_match = Some((w, d0));
                             min_v_diff = v_diff;
@@ -81,17 +102,17 @@ impl TSLConfig {
         if let Some((w, d0)) = best_match {
             // Adjust d0 if needed for the specific v
             let mut adjusted_d0 = d0;
-            
+
             // Ensure d0 is valid for this v and w combination
             let max_d = v * (w - 1);
             if adjusted_d0 > max_d {
                 // Find a good d0 in the valid range
                 adjusted_d0 = max_d / 2; // Start from middle
-                
+
                 // Find the layer with maximum size around the middle
                 let mut best_d0 = adjusted_d0;
                 let mut max_size = BigUint::zero();
-                
+
                 for d in (0..=max_d).rev().take(max_d.min(20)) {
                     if let Ok(layer_size) = calculate_layer_size(d, v, w) {
                         if layer_size > max_size {
@@ -102,13 +123,17 @@ impl TSLConfig {
                 }
                 adjusted_d0 = best_d0;
             }
-            
-            TSLConfig { w, v, d0: adjusted_d0 }
+
+            TSLConfig {
+                w,
+                v,
+                d0: adjusted_d0,
+            }
         } else {
             // Fallback: use conservative parameters
             let w = if security_bits <= 128 { 4 } else { 6 };
             let d0 = v * (w - 1) / 2; // Use middle layer
-            
+
             TSLConfig { w, v, d0 }
         }
     }
@@ -303,9 +328,8 @@ mod tests {
         assert!(config.d0() > 0);
 
         // Check that layer d0 has vertices
-        let layer_size_big = calculate_layer_size(config.d0(), config.v(), config.w())
-            .unwrap();
-        
+        let layer_size_big = calculate_layer_size(config.d0(), config.v(), config.w()).unwrap();
+
         // For large layer sizes that don't fit in usize, just check they're positive
         if let Some(layer_size) = layer_size_big.to_usize() {
             assert!(
@@ -332,11 +356,11 @@ mod tests {
         assert_eq!(config_128.v(), 25); // Should use default v=25 for 128-bit
         assert_eq!(config_128.w(), 86);
 
-        // 160-bit security with default v=35  
+        // 160-bit security with default v=35
         let config_160 = TSLConfig::new(160);
         assert_eq!(config_160.v(), 35); // Should use default v=35 for 160-bit
         assert_eq!(config_160.w(), 56);
-        
+
         // Test custom v with new_full
         let config_custom = TSLConfig::new_full(128, 30);
         assert_eq!(config_custom.v(), 30);
@@ -345,7 +369,7 @@ mod tests {
 
     #[test]
     #[should_panic(expected = "Only 128-bit and 160-bit security levels are supported")]
-    fn test_tsl_invalid_security_level() {
+    fn test_tsl_invalid_security_level_96() {
         // Should panic for unsupported security levels
         let _ = TSLConfig::new(96);
     }
@@ -359,18 +383,22 @@ mod tests {
 
     #[test]
     fn test_tsl_encoding_basic() {
-        let config = TSLConfig::with_params(4, 4, 4); // Small example for testing
+        let w = 4;
+        let v = 4;
+        let d0 = 4;
+        let config = TSLConfig::with_params(w, v, d0); // Small example for testing
         let tsl = TSL::new(config);
 
         // Test encoding
         let message = b"test message";
-        let randomness = b"random seed";
+        let randomness = b"random seed!";
 
         let encoded = tsl.encode(message, randomness).unwrap();
+        println!("encoded: ${encoded:?}");
 
         // Verify the encoded vertex is in the correct layer
-        let layer = Hypercube::new(4, 4).calculate_layer(&encoded);
-        assert_eq!(layer, 4); // Should be in layer d0 = 4
+        let layer = Hypercube::new(w, v).calculate_layer(&encoded);
+        assert_eq!(layer, d0); // Should be in layer d0 = 4
     }
 
     #[test]
