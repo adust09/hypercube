@@ -8,57 +8,57 @@ use crate::crypto::random::{OsSecureRandom, SecureRandom};
 
 /// WOTS parameters
 /// WOTS parameters derived from hypercube scheme
-#[derive(Debug, Clone,)]
+#[derive(Debug, Clone)]
 pub struct WotsParams {
     w: usize,
     chains: usize,
 }
 
 impl WotsParams {
-    pub fn new(w: usize, chains: usize,) -> Self {
+    pub fn new(w: usize, chains: usize) -> Self {
         assert!(w > 1, "w must be greater than 1");
         assert!(chains > 0, "chains must be positive");
-        WotsParams { w, chains, }
+        WotsParams { w, chains }
     }
 
-    pub fn w(&self,) -> usize {
+    pub fn w(&self) -> usize {
         self.w
     }
 
-    pub fn chains(&self,) -> usize {
+    pub fn chains(&self) -> usize {
         self.chains
     }
 
-    pub fn max_hash_iterations(&self,) -> usize {
+    pub fn max_hash_iterations(&self) -> usize {
         self.w - 1
     }
 }
 
 /// WOTS public key
 /// pk = (pk₁, ..., pkₗ) where pkᵢ = H^{w-1}(skᵢ)
-#[derive(Debug, Clone,)]
+#[derive(Debug, Clone)]
 pub struct WotsPublicKey {
-    chains: Vec<Vec<u8,>,>,
+    chains: Vec<Vec<u8>>,
     params: WotsParams,
 }
 
 impl WotsPublicKey {
-    pub fn chains(&self,) -> &[Vec<u8,>] {
+    pub fn chains(&self) -> &[Vec<u8>] {
         &self.chains
     }
 
-    pub fn params(&self,) -> &WotsParams {
+    pub fn params(&self) -> &WotsParams {
         &self.params
     }
 
-    pub fn from_chains(chains: Vec<Vec<u8,>,>, params: WotsParams,) -> Self {
-        WotsPublicKey { chains, params, }
+    pub fn from_chains(chains: Vec<Vec<u8>>, params: WotsParams) -> Self {
+        WotsPublicKey { chains, params }
     }
 
     /// Verify a signature
     /// Paper Algorithm WOTS-Verify: Verifies signature by checking
     /// if H^{w-1-xᵢ}(σᵢ) = pkᵢ for all i
-    pub fn verify(&self, message_digest: &[usize], signature: &WotsSignature,) -> bool {
+    pub fn verify(&self, message_digest: &[usize], signature: &WotsSignature) -> bool {
         if message_digest.len() != self.params.chains {
             return false;
         }
@@ -77,7 +77,7 @@ impl WotsPublicKey {
 
             // Compute H^{w-1-xᵢ}(σᵢ) and check if it equals pkᵢ
             let iterations = self.params.w - 1 - x_i;
-            let computed = hash_chain(&hasher, &signature.chains[i], iterations,);
+            let computed = hash_chain(&hasher, &signature.chains[i], iterations);
 
             if computed != self.chains[i] {
                 return false;
@@ -90,18 +90,18 @@ impl WotsPublicKey {
 
 /// WOTS secret key
 /// sk = (sk₁, ..., skₗ) where each skᵢ is random
-#[derive(Debug, Clone,)]
+#[derive(Debug, Clone)]
 pub struct WotsSecretKey {
-    chains: Vec<Vec<u8,>,>,
+    chains: Vec<Vec<u8>>,
 }
 
 impl WotsSecretKey {
-    pub fn chains(&self,) -> &[Vec<u8,>] {
+    pub fn chains(&self) -> &[Vec<u8>] {
         &self.chains
     }
 
-    pub fn from_chains(chains: Vec<Vec<u8,>,>,) -> Self {
-        WotsSecretKey { chains, }
+    pub fn from_chains(chains: Vec<Vec<u8>>) -> Self {
+        WotsSecretKey { chains }
     }
 }
 
@@ -114,28 +114,31 @@ pub struct WotsKeypair {
 
 impl WotsKeypair {
     /// Generate a new keypair
-    pub fn generate(params: &WotsParams,) -> Self {
+    pub fn generate(params: &WotsParams) -> Self {
         let mut rng = OsSecureRandom::new();
         let hasher = SHA256::new();
 
-        let mut sk_chains = Vec::with_capacity(params.chains,);
-        let mut pk_chains = Vec::with_capacity(params.chains,);
+        let mut sk_chains = Vec::with_capacity(params.chains);
+        let mut pk_chains = Vec::with_capacity(params.chains);
 
         // Generate each chain
         for _ in 0..params.chains {
             // Generate random secret key
-            let sk_i = rng.random_bytes(hasher.output_size(),);
+            let sk_i = rng.random_bytes(hasher.output_size());
 
             // Paper: Compute public key pkᵢ = H^{w-1}(skᵢ)
-            let pk_i = hash_chain(&hasher, &sk_i, params.w - 1,);
+            let pk_i = hash_chain(&hasher, &sk_i, params.w - 1);
 
-            sk_chains.push(sk_i,);
-            pk_chains.push(pk_i,);
+            sk_chains.push(sk_i);
+            pk_chains.push(pk_i);
         }
 
         WotsKeypair {
-            public_key: WotsPublicKey { chains: pk_chains, params: params.clone(), },
-            secret_key: WotsSecretKey { chains: sk_chains, },
+            public_key: WotsPublicKey {
+                chains: pk_chains,
+                params: params.clone(),
+            },
+            secret_key: WotsSecretKey { chains: sk_chains },
             params: params.clone(),
         }
     }
@@ -145,14 +148,18 @@ impl WotsKeypair {
         secret_key: WotsSecretKey,
         params: WotsParams,
     ) -> Self {
-        WotsKeypair { public_key, secret_key, params, }
+        WotsKeypair {
+            public_key,
+            secret_key,
+            params,
+        }
     }
 
-    pub fn public_key(&self,) -> &WotsPublicKey {
+    pub fn public_key(&self) -> &WotsPublicKey {
         &self.public_key
     }
 
-    pub fn secret_key(&self,) -> &WotsSecretKey {
+    pub fn secret_key(&self) -> &WotsSecretKey {
         &self.secret_key
     }
 
@@ -160,7 +167,7 @@ impl WotsKeypair {
     /// Integration with hypercube encoding
     /// The encoding scheme maps the message to a vertex which provides
     /// the WOTS message digits
-    pub fn sign<E: crate::core::encoding::EncodingScheme,>(
+    pub fn sign<E: crate::core::encoding::EncodingScheme>(
         &self,
         message: &[u8],
         encoding: &E,
@@ -170,19 +177,22 @@ impl WotsKeypair {
         let randomness = [0u8; 32];
 
         // Encode message to hypercube vertex
-        let vertex = encoding.encode(message, &randomness,);
+        let vertex = encoding.encode(message, &randomness);
 
         // The vertex components (a₁, ..., aᵥ) become WOTS message digits
         // Convert from hypercube range [1, w] to WOTS range [0, w-1]
-        let message_digest: Vec<usize,> =
-            vertex.components().iter().map(|&x| x.saturating_sub(1,),).collect();
+        let message_digest: Vec<usize> = vertex
+            .components()
+            .iter()
+            .map(|&x| x.saturating_sub(1))
+            .collect();
 
-        self.sign_raw(&message_digest,)
+        self.sign_raw(&message_digest)
     }
 
     /// Sign a message digest
     /// σᵢ = H^{xᵢ}(skᵢ) for each digit xᵢ
-    pub fn sign_raw(&self, message_digest: &[usize],) -> WotsSignature {
+    pub fn sign_raw(&self, message_digest: &[usize]) -> WotsSignature {
         assert_eq!(
             message_digest.len(),
             self.params.chains,
@@ -190,7 +200,7 @@ impl WotsKeypair {
         );
 
         let hasher = SHA256::new();
-        let mut sig_chains = Vec::with_capacity(self.params.chains,);
+        let mut sig_chains = Vec::with_capacity(self.params.chains);
 
         for i in 0..self.params.chains {
             let x_i = message_digest[i];
@@ -202,42 +212,42 @@ impl WotsKeypair {
             );
 
             // Compute σᵢ = H^{xᵢ}(skᵢ)
-            let sig_i = hash_chain(&hasher, &self.secret_key.chains[i], x_i,);
-            sig_chains.push(sig_i,);
+            let sig_i = hash_chain(&hasher, &self.secret_key.chains[i], x_i);
+            sig_chains.push(sig_i);
         }
 
-        WotsSignature { chains: sig_chains, }
+        WotsSignature { chains: sig_chains }
     }
 }
 
 /// WOTS signature
 /// σ = (σ₁, ..., σₗ) where σᵢ = H^{xᵢ}(skᵢ)
-#[derive(Debug, Clone,)]
+#[derive(Debug, Clone)]
 pub struct WotsSignature {
-    chains: Vec<Vec<u8,>,>,
+    chains: Vec<Vec<u8>>,
 }
 
 impl WotsSignature {
-    pub fn chains(&self,) -> &[Vec<u8,>] {
+    pub fn chains(&self) -> &[Vec<u8>] {
         &self.chains
     }
 
-    pub fn from_chains(chains: Vec<Vec<u8,>,>,) -> Self {
-        WotsSignature { chains, }
+    pub fn from_chains(chains: Vec<Vec<u8>>) -> Self {
+        WotsSignature { chains }
     }
 }
 
 /// Compute hash chain H^k(x)
 /// Hash chain computation H^k(x) = H(H(...H(x)...))
 /// where H is applied k times. H^0(x) = x by definition.
-pub fn hash_chain(hasher: &dyn HashFunction, input: &[u8], iterations: usize,) -> Vec<u8,> {
+pub fn hash_chain(hasher: &dyn HashFunction, input: &[u8], iterations: usize) -> Vec<u8> {
     if iterations == 0 {
         return input.to_vec();
     }
 
     let mut result = input.to_vec();
     for _ in 0..iterations {
-        result = hasher.hash(&result,);
+        result = hasher.hash(&result);
     }
     result
 }
@@ -249,7 +259,7 @@ mod tests {
     #[test]
     fn test_wots_params() {
         // Test WOTS parameter creation
-        let params = WotsParams::new(4, 64,); // w=4, v=64
+        let params = WotsParams::new(4, 64); // w=4, v=64
 
         assert_eq!(params.w(), 4);
         assert_eq!(params.chains(), 64);
@@ -258,8 +268,8 @@ mod tests {
 
     #[test]
     fn test_wots_keygen() {
-        let params = WotsParams::new(4, 8,); // Small params for testing
-        let keypair = WotsKeypair::generate(&params,);
+        let params = WotsParams::new(4, 8); // Small params for testing
+        let keypair = WotsKeypair::generate(&params);
 
         // Check key sizes
         assert_eq!(keypair.public_key().chains().len(), 8);
@@ -275,14 +285,14 @@ mod tests {
 
     #[test]
     fn test_wots_sign_verify() {
-        let params = WotsParams::new(4, 8,);
-        let keypair = WotsKeypair::generate(&params,);
+        let params = WotsParams::new(4, 8);
+        let keypair = WotsKeypair::generate(&params);
 
         // Create a message digest (would come from encoding in real use)
         let message_digest = vec![1, 2, 0, 3, 1, 2, 0, 3]; // Values in [0,3] for w=4
 
         // Sign
-        let signature = keypair.sign_raw(&message_digest,);
+        let signature = keypair.sign_raw(&message_digest);
 
         // Verify
         assert!(keypair.public_key().verify(&message_digest, &signature));
@@ -290,13 +300,13 @@ mod tests {
 
     #[test]
     fn test_wots_wrong_message() {
-        let params = WotsParams::new(4, 8,);
-        let keypair = WotsKeypair::generate(&params,);
+        let params = WotsParams::new(4, 8);
+        let keypair = WotsKeypair::generate(&params);
 
         let message_digest = vec![1, 2, 0, 3, 1, 2, 0, 3];
         let wrong_message = vec![0, 2, 0, 3, 1, 2, 0, 3]; // Changed first element
 
-        let signature = keypair.sign_raw(&message_digest,);
+        let signature = keypair.sign_raw(&message_digest);
 
         // Verification should fail for wrong message
         assert!(!keypair.public_key().verify(&wrong_message, &signature));
@@ -304,11 +314,11 @@ mod tests {
 
     #[test]
     fn test_wots_signature_size() {
-        let params = WotsParams::new(4, 64,);
-        let keypair = WotsKeypair::generate(&params,);
+        let params = WotsParams::new(4, 64);
+        let keypair = WotsKeypair::generate(&params);
 
         let message_digest = vec![2; 64]; // All 2s
-        let signature = keypair.sign_raw(&message_digest,);
+        let signature = keypair.sign_raw(&message_digest);
 
         // Signature should have 64 chains
         assert_eq!(signature.chains().len(), 64);
@@ -325,32 +335,32 @@ mod tests {
         let input = vec![0x42; 32]; // 32 bytes of 0x42
 
         // Test H^0(x) = x
-        let h0 = hash_chain(&hasher, &input, 0,);
+        let h0 = hash_chain(&hasher, &input, 0);
         assert_eq!(h0, input);
 
         // Test H^1(x) = H(x)
-        let h1 = hash_chain(&hasher, &input, 1,);
-        let expected_h1 = hasher.hash(&input,);
+        let h1 = hash_chain(&hasher, &input, 1);
+        let expected_h1 = hasher.hash(&input);
         assert_eq!(h1, expected_h1);
 
         // Test H^3(x) = H(H(H(x)))
-        let h3 = hash_chain(&hasher, &input, 3,);
-        let temp1 = hasher.hash(&input,);
-        let temp2 = hasher.hash(&temp1,);
-        let expected_h3 = hasher.hash(&temp2,);
+        let h3 = hash_chain(&hasher, &input, 3);
+        let temp1 = hasher.hash(&input);
+        let temp2 = hasher.hash(&temp1);
+        let expected_h3 = hasher.hash(&temp2);
         assert_eq!(h3, expected_h3);
     }
 
     #[test]
     fn test_wots_deterministic_signing() {
-        let params = WotsParams::new(4, 8,);
-        let keypair = WotsKeypair::generate(&params,);
+        let params = WotsParams::new(4, 8);
+        let keypair = WotsKeypair::generate(&params);
 
         let message_digest = vec![1, 2, 0, 3, 1, 2, 0, 3];
 
         // Same message should produce same signature
-        let sig1 = keypair.sign_raw(&message_digest,);
-        let sig2 = keypair.sign_raw(&message_digest,);
+        let sig1 = keypair.sign_raw(&message_digest);
+        let sig2 = keypair.sign_raw(&message_digest);
 
         assert_eq!(sig1.chains(), sig2.chains());
     }
@@ -360,14 +370,14 @@ mod tests {
         // Test one-time security property
         // If we sign two different messages with same key,
         // an attacker might be able to forge
-        let params = WotsParams::new(4, 4,); // Small for testing
-        let keypair = WotsKeypair::generate(&params,);
+        let params = WotsParams::new(4, 4); // Small for testing
+        let keypair = WotsKeypair::generate(&params);
 
         let msg1 = vec![0, 1, 2, 3];
         let msg2 = vec![1, 2, 3, 0];
 
-        let sig1 = keypair.sign_raw(&msg1,);
-        let sig2 = keypair.sign_raw(&msg2,);
+        let sig1 = keypair.sign_raw(&msg1);
+        let sig2 = keypair.sign_raw(&msg2);
 
         // Both signatures should verify
         assert!(keypair.public_key().verify(&msg1, &sig1));
