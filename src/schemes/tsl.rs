@@ -37,6 +37,8 @@ impl TSLConfig {
     /// Create TSL config for given security level and signature size v
     /// Finds optimal w and d0 parameters based on paper recommendations
     pub fn new_full(security_bits: usize, v: usize) -> Self {
+        assert!(security_bits == 128 || security_bits == 160, "Only 128-bit and 160-bit security levels are supported");
+
         // Paper parameters for TSL (w, v, optimal_d0)
         let paper_params_128 = [
             (86, 25, 384),
@@ -64,7 +66,7 @@ impl TSLConfig {
         ];
 
         // Choose parameter set based on security level
-        let params = if security_bits <= 128 {
+        let params = if security_bits == 128 {
             &paper_params_128[..]
         } else {
             &paper_params_160[..]

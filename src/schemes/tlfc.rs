@@ -18,6 +18,9 @@ pub struct TLFCConfig {
     c: usize, // Paper: Number of checksum chains (optimization parameter)
 }
 
+// TODO: Consider using `num_bigint` for large integers if needed
+// This allows us to handle larger values without overflow issues
+// For now, we use usize for simplicity and performance
 impl TLFCConfig {
     /// Create TLFC config for given security level
     pub fn new(security_bits: usize) -> Self {
