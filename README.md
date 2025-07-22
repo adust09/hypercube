@@ -17,6 +17,9 @@ cargo bench
 
 ## Usage Example
 
+To use the Hypercube signatures, you can follow this example that demonstrates how to create a TSL (Tree-based Signature Layer) configuration, generate a keypair, sign a message, and verify the signature.
+For now, TSL is the only supported scheme, but TL1C and TLFC using actual bigger parameters will be added in the future.
+
 ```rust
 use hypercube_signatures::schemes::tsl::{TSL, TSLConfig};
 use hypercube_signatures::wots::{WotsParams, WotsKeypair};

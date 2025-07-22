@@ -17,6 +17,9 @@ pub struct TL1CConfig {
     d0: usize,
 }
 
+// TODO: Update to use `num_bigint` for large integers if needed
+// This allows us to handle larger values without overflow issues
+// For now, we use usize for simplicity and performance
 impl TL1CConfig {
     /// Create TL1C config for given security level
     pub fn new(security_bits: usize) -> Self {
