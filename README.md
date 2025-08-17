@@ -1,6 +1,7 @@
 # Hypercube-based-xmss
 
 A Rust implementation of [At the Top of the Hypercube](https://eprint.iacr.org/2025/889.pdf) by Khovratovich et al.
+And XMSS with TSL, which introduced in hypercube.
 
 ## Building
 
